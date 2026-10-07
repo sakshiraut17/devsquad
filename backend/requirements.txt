@@ -1,0 +1,33 @@
+# DevSquad Backend Dependencies
+
+# FastAPI Framework & Server
+fastapi>=0.110.0,<0.112.0
+uvicorn[standard]>=0.28.0,<0.30.0
+pydantic>=2.6.4,<3.0.0
+pydantic-settings>=2.2.1,<3.0.0
+
+# Database & ORM
+sqlalchemy[asyncio]>=2.0.28,<3.0.0
+aiosqlite>=0.20.0,<0.21.0 # Async SQLite engine for local dev (pure Python, zero C++ build requirements)
+alembic>=1.13.1,<2.0.0
+
+# LLM Providers & Agent Framework
+langgraph>=0.0.30
+langchain-core>=0.1.30
+google-generativeai>=0.4.1
+openai>=1.14.0
+tenacity>=8.2.3
+
+# GitHub API & Utilities
+httpx>=0.27.0,<0.28.0
+PyJWT>=2.8.0,<3.0.0
+unidiff>=0.7.5
+
+# Docker API Wrapper
+docker>=7.0.0
+
+# Testing & Linting
+pytest>=8.1.1
+pytest-asyncio>=0.23.6
+pytest-cov>=4.1.0
+ruff>=0.3.4
