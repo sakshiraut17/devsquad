@@ -13,7 +13,7 @@ DevSquad is an AI-assisted software engineering platform designed to evolve towa
 
 ---
 
-## 📌 Overview & Current Status
+## Overview & Current Status
 
 DevSquad currently provides the foundational architecture, asynchronous backend API services, reactive frontend dashboard, structured AI provider abstraction, database datastore foundation, and automated testing suite required for the larger platform.
 
@@ -21,18 +21,18 @@ The architecture is intentionally designed to support future repository-aware is
 
 ---
 
-## 🎯 Problem & Product Vision
+## Problem & Product Vision
 
 Resolving software issues in legacy codebases requires significant cognitive overhead: contextual file lookup, implementation design, code patch creation, unit testing, and code review. Modern developer assistants often act as isolated one-shot text prompt generators without understanding full codebase context or verifying if generated code compiles and passes tests.
 
-DevSquad is designed to address this gap by establishing a **controlled, sandboxed software engineering pipeline**:
+DevSquad is designed to address this gap by establishing a controlled, sandboxed software engineering pipeline:
 - **Context Awareness**: Deep inspection of repository file structures and issue descriptions.
 - **Deterministic Orchestration**: Stateful graph management with bounded auto-repair retry loops.
 - **Execution Safety**: Isolation of generated code changes inside rootless Docker containers before human review and merging.
 
 ---
 
-## 🏗️ System Architecture
+## System Architecture
 
 ```
                     +----------------------------------+
@@ -100,7 +100,7 @@ For full architectural blueprints, see [docs/architecture/system_architecture.md
 
 ---
 
-## 🤖 AI Engineering Approach
+## AI Engineering Approach
 
 For an in-depth breakdown of AI, Deep Learning, and Agentic AI concepts, see [docs/ai-architecture.md](docs/ai-architecture.md).
 
@@ -111,11 +111,11 @@ DevSquad uses AI to assist with software engineering tasks including issue conte
 Software engineering reasoning relies on transformer-based language models (such as Gemini 1.5 Pro or GPT-4o) for understanding natural language issue bodies, source code structure, and module dependencies.
 
 ### 3. Agentic AI & State Machine Orchestration
-DevSquad employs a stateful cyclic execution engine (powered by **LangGraph**) to coordinate specialized functional components (`Planner`, `Coder`, `Tester`, `Reviewer`) through structured state transitions and bounded auto-repair loops.
+DevSquad employs a stateful cyclic execution engine (powered by LangGraph) designed to coordinate specialized functional components (Planner, Coder, Tester, Reviewer) through structured state transitions and bounded auto-repair loops.
 
 ---
 
-## ⚡ Current Capabilities vs Product Direction
+## Current Capabilities vs Product Direction
 
 ### Current Capabilities (Implemented & Verified)
 - **FastAPI Asynchronous Backend**: High-performance REST API with structured logging and CORS middleware.
@@ -123,7 +123,7 @@ DevSquad employs a stateful cyclic execution engine (powered by **LangGraph**) t
 - **SQLAlchemy 2.0 ORM Datastore**: Async session manager with 8 core schema models (`User`, `Repository`, `Issue`, `Run`, `AgentLog`, `Patch`, `TestResult`, `PullRequest`).
 - **Configuration Engine**: Environment-driven secret parsing using `pydantic-settings` without hardcoded credentials.
 - **Next.js 14 Dashboard**: Reactive client dashboard with responsive navigation, system status polling widget, and architecture overview cards.
-- **Automated Backend Testing**: Pytest suite verifying API endpoints, configuration loading, and database model relationships (**100% pass rate**).
+- **Automated Backend Testing**: Pytest suite verifying API endpoints, configuration loading, and database model relationships (100% pass rate).
 
 ### Planned Product Direction
 DevSquad is actively being developed toward a complete software engineering workflow:
@@ -135,7 +135,7 @@ DevSquad is actively being developed toward a complete software engineering work
 
 ---
 
-## 💻 Tech Stack
+## Tech Stack
 
 - **Frontend**: Next.js 14 App Router, TypeScript, Tailwind CSS, Lucide Icons
 - **Backend**: Python 3.11+, FastAPI (Async ASGI), Pydantic V2, Pydantic-Settings
@@ -145,7 +145,7 @@ DevSquad is actively being developed toward a complete software engineering work
 
 ---
 
-## 📂 Repository Structure
+## Repository Structure
 
 ```
 devsquad/
@@ -181,7 +181,7 @@ devsquad/
 
 ---
 
-## 🚀 Quickstart & Local Setup
+## Quickstart & Local Setup
 
 ### Prerequisites
 - Python 3.11+
@@ -220,7 +220,7 @@ Open dashboard in browser: `http://localhost:3000`
 
 ---
 
-## 🧪 Automated Testing
+## Automated Testing
 
 To run the backend test suite:
 ```bash
@@ -238,7 +238,7 @@ tests/test_models.py ..                                                  [100%]
 
 ---
 
-## 🛡️ Security & Isolation
+## Security & Isolation
 
 - **Secret Management**: API keys and tokens are loaded strictly via environment variables (excluded from Git via `.gitignore`).
 - **Payload Validation**: All incoming requests are validated using Pydantic schemas.
@@ -246,6 +246,6 @@ tests/test_models.py ..                                                  [100%]
 
 ---
 
-## 📜 License
+## License
 
 Distributed under the MIT License. See [LICENSE](LICENSE) for details.

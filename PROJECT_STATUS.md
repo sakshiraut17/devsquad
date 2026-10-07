@@ -5,13 +5,13 @@
 
 ---
 
-## 📌 Executive Summary
+## Executive Summary
 
 DevSquad is an AI-assisted software engineering platform designed to automate issue resolution, code modification, automated testing, and pull request generation. The repository currently contains the foundational software engineering architecture, including an asynchronous REST API, a database datastore, an AI provider abstraction layer, state machine schemas, automated unit tests, and a reactive frontend dashboard.
 
 ---
 
-## 🛠️ Implemented Functionality
+## Implemented Functionality
 
 The following components are fully implemented, configured, and empirically verified in the codebase:
 
@@ -35,7 +35,7 @@ The following components are fully implemented, configured, and empirically veri
 
 ---
 
-## 🔒 Current Limitations
+## Current Limitations
 
 1. **GitHub Integration**: Full GitHub OAuth login and issue fetching endpoints are specified in the API architecture and queued for active development.
 2. **Multi-Agent Execution Nodes**: State machine schemas are defined; individual agent node bodies (Planner, Coder, Tester, Reviewer) are scheduled for future development phases.
@@ -43,7 +43,7 @@ The following components are fully implemented, configured, and empirically veri
 
 ---
 
-## 🔮 Product Direction
+## Product Direction
 
 DevSquad is evolving toward a unified, end-to-end software engineering pipeline:
 1. **Repository Context Ingestion**: Deep indexing of multi-file codebase trees and dependency structures.
