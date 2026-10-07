@@ -1,62 +1,53 @@
-# DevSquad — Project Status & Sprint Tracker
+# DevSquad — Project Status
 
-**Current Sprint**: Sprint 1 (Foundation & Architecture)  
-**Sprint Status**: 🟢 **COMPLETED** (Verified 10 October 2026 Submission Checkpoint)  
-**Target Submission Date**: 10 October 2026  
-**Git Release Tag**: `v0.1.0-foundation`  
+**System**: DevSquad AI Software Engineering Platform  
+**Current State**: Core Engineering Foundation Operational  
 
 ---
 
-## 🎯 60-Day / 10-Sprint Execution Progress Table
+## 📌 Executive Summary
 
-| Sprint | Days | Focus Area | Status | Deliverables / Tag |
-| :--- | :--- | :--- | :--- | :--- |
-| **Sprint 1** | **Days 1–6** | **Foundation & Architecture** | 🟢 **COMPLETED** | [`v0.1.0-foundation`](docs/sprints/sprint_1_report.md) |
-| **Sprint 2** | **Days 7–12** | **GitHub Integration Engine** | ⚪ Planned | `v0.2.0-github-integration` |
-| **Sprint 3** | **Days 13–18** | **Planner Agent (LangGraph)** | ⚪ Planned | `v0.3.0-planner-agent` |
-| **Sprint 4** | **Days 19–24** | **Coder Agent & Diff Viewer** | ⚪ Planned | `v0.4.0-coder-agent` |
-| **Sprint 5** | **Days 25–30** | **Docker Sandbox Execution** | ⚪ Planned | `v0.5.0-docker-sandbox` |
-| **Sprint 6** | **Days 31–36** | **Tester & Reviewer Agents** | ⚪ Planned | `v0.6.0-tester-reviewer` |
-| **Sprint 7** | **Days 37–42** | **PR Workflow & Human Gateway** | ⚪ Planned | `v0.7.0-pr-workflow` |
-| **Sprint 8** | **Days 43–48** | **UI Timeline & Analytics** | ⚪ Planned | `v0.8.0-dashboard-ui` |
-| **Sprint 9** | **Days 49–54** | **Reliability & E2E Testing** | ⚪ Planned | `v0.9.0-reliability-eval` |
-| **Sprint 10** | **Days 55–60** | **Deployment & Presentation** | ⚪ Planned | `v1.0.0-production-release` |
+DevSquad is an AI-assisted software engineering platform designed to automate issue resolution, code modification, automated testing, and pull request generation. The repository currently contains the foundational software engineering architecture, including an asynchronous REST API, a database datastore, an AI provider abstraction layer, state machine schemas, automated unit tests, and a reactive frontend dashboard.
 
 ---
 
-## 📋 Sprint 1 Accomplishments & Verified Functionality
+## 🛠️ Implemented Functionality
 
-### 1. Monorepo Repository Architecture
-- Decoupled `backend/` (FastAPI + SQLAlchemy 2.0) and `frontend/` (Next.js 14 App Router).
-- Ephemeral sandbox specs in `docker/` and CI workflow in `.github/workflows/ci.yml`.
+The following components are fully implemented, configured, and empirically verified in the codebase:
 
-### 2. Verified Backend API Gateway
-- `GET /health` -> `200 OK` -> `{"status": "healthy", "project": "DevSquad AI Engineering Platform", "version": "0.1.0"}`
-- `GET /api/v1/health` -> `200 OK`
-- `GET /api/v1/system/status` -> `200 OK` -> Returns live diagnostic checks (Database, LLM, Docker availability).
+### 1. API & Backend Services
+- **FastAPI ASGI Server**: Asynchronous Python API server with CORS middleware, exception handling, and structured logging ([backend/app/main.py](file:///c:/Users/SAKSHI%20RAUT/OneDrive/Desktop/stock_signal_generator/backend/app/main.py)).
+- **Configuration Engine**: Strongly-typed configuration system built using `pydantic-settings` to manage secrets via `.env` files without hardcoding ([backend/app/core/config.py](file:///c:/Users/SAKSHI%20RAUT/OneDrive/Desktop/stock_signal_generator/backend/app/core/config.py)).
+- **Diagnostic Endpoints**:
+  - `GET /health`: Basic system liveness verification.
+  - `GET /api/v1/system/status`: Diagnostic endpoint monitoring datastore connectivity, LLM configuration, and container engine availability.
 
-### 3. Verified Datastore Architecture
-- SQLAlchemy 2.0 Async session with 8 core ORM models (`User`, `Repository`, `Issue`, `Run`, `AgentLog`, `Patch`, `TestResult`, `PullRequest`).
-- PostgreSQL driver support with SQLite async fallback (`aiosqlite`) for zero-dependency local verification.
+### 2. Datastore & Persistence Layer
+- **Async SQLAlchemy 2.0 Engine**: Supports PostgreSQL with a pure-python `aiosqlite` async driver for zero-dependency local execution.
+- **8 Core Schema Models**: `User`, `Repository`, `Issue`, `Run`, `AgentLog`, `Patch`, `TestResult`, and `PullRequest` ([backend/app/db/models/](file:///c:/Users/SAKSHI%20RAUT/OneDrive/Desktop/stock_signal_generator/backend/app/db/models/)).
 
-### 4. Verified Automated Tests
-- Pytest suite (`backend/tests/`): **100% Pass Rate (6/6 tests passing)**.
+### 3. Client Dashboard
+- **Next.js 14 App Router**: Reactive user interface built with TypeScript, Tailwind CSS, and Lucide icons ([frontend/src/app/](file:///c:/Users/SAKSHI%20RAUT/OneDrive/Desktop/stock_signal_generator/frontend/src/app/)).
+- **Live Health Monitor**: `SystemHealthCard` component that automatically polls the backend diagnostic API every 10 seconds.
 
-### 5. Academic AI / ML / DL Documentation
-- Published [docs/ai-architecture.md](docs/ai-architecture.md) detailing theoretical and practical relevance of AI, Deep Learning (Transformers/LLMs), Agentic AI (LangGraph state machine), and proposed Machine Learning models (Task difficulty classifier, failure predictor, cost regression).
-
----
-
-## 🔒 Known Limitations (Sprint 1 Checkpoint)
-
-1. **GitHub API Credentials**: Full GitHub OAuth token exchange and live issue fetching are scheduled for Sprint 2.
-2. **Agent Nodes**: LangGraph state graph schemas are established; node execution bodies for Planner, Coder, Tester, and Reviewer are scheduled for Sprints 3–6.
-3. **Docker Execution Sandbox**: Container Dockerfile specifications exist in `docker/`; active sandbox invocation is scheduled for Sprint 5.
+### 4. Automated Testing
+- **Backend Test Suite**: Pytest verification suite in `backend/tests/` using `httpx.AsyncClient` (**6/6 unit tests passing**).
 
 ---
 
-## ➡️ Next Sprint Objectives (Sprint 2 — Days 7–12)
+## 🔒 Current Limitations
 
-- GitHub OAuth authentication & secret storage.
-- GitHub REST API wrapper client (`app/services/github_client.py`).
-- Repository syncing & issue explorer endpoints (`GET /api/v1/repos`, `GET /api/v1/issues`).
+1. **GitHub Integration**: Full GitHub OAuth login and issue fetching endpoints are specified in the API architecture and queued for active development.
+2. **Multi-Agent Execution Nodes**: State machine schemas are defined; individual agent node bodies (Planner, Coder, Tester, Reviewer) are scheduled for future development phases.
+3. **Container Sandbox Runner**: Ephemeral Docker image specifications exist in `docker/`; active container runner execution will be integrated in an upcoming update.
+
+---
+
+## 🔮 Product Direction
+
+DevSquad is evolving toward a unified, end-to-end software engineering pipeline:
+1. **Repository Context Ingestion**: Deep indexing of multi-file codebase trees and dependency structures.
+2. **Issue-to-Plan Reasoning**: Converting issue descriptions into structured task breakdowns and explicit acceptance criteria.
+3. **Automated Patch Generation**: Synthesizing code diffs and unit tests matching repository conventions.
+4. **Sandboxed Test Verification**: Executing tests inside resource-constrained rootless Docker containers with auto-repair feedback loops.
+5. **Human-in-the-Loop Approval**: Providing interactive visual diff reviews prior to automated GitHub Pull Request creation.

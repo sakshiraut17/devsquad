@@ -39,7 +39,7 @@ export const Sidebar: React.FC = () => {
             <span>Repositories</span>
           </div>
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700">
-            Sprint 2
+            Roadmap
           </span>
         </a>
 
@@ -52,7 +52,7 @@ export const Sidebar: React.FC = () => {
             <span>GitHub Issues</span>
           </div>
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700">
-            Sprint 2
+            Roadmap
           </span>
         </a>
 
@@ -65,7 +65,7 @@ export const Sidebar: React.FC = () => {
             <span>Workflow Runs</span>
           </div>
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700">
-            Sprint 3+
+            Roadmap
           </span>
         </a>
       </nav>
@@ -75,7 +75,7 @@ export const Sidebar: React.FC = () => {
         <div className="flex items-center justify-between text-xs text-muted">
           <span className="flex items-center gap-1.5">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>Sprint 1 Checkpoint</span>
+            <span>Foundation Ready</span>
           </span>
           <span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-semibold">
             v0.1.0

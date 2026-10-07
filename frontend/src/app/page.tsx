@@ -6,7 +6,7 @@ import { GitPullRequest, ShieldCheck, Terminal, Layers } from 'lucide-react';
 export default function DashboardHome() {
   return (
     <div className="space-y-8">
-      {/* Top Sprint Banner */}
+      {/* Top Banner */}
       <SprintBanner />
 
       {/* Infrastructure Health Status */}
@@ -27,10 +27,10 @@ export default function DashboardHome() {
                 <Layers className="w-5 h-5" />
               </div>
               <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-blue-500/20 text-blue-400 border border-blue-500/30">
-                PLANNED — SPRINT 3
+                PLANNED
               </span>
             </div>
-            <h4 className="font-semibold text-white mb-1">1. Planner Agent</h4>
+            <h4 className="font-semibold text-white mb-1">1. Planner Subsystem</h4>
             <p className="text-xs text-muted leading-relaxed">
               Analyzes GitHub issue context and repository file trees to formulate structured task lists and acceptance criteria.
             </p>
@@ -43,10 +43,10 @@ export default function DashboardHome() {
                 <Terminal className="w-5 h-5" />
               </div>
               <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                PLANNED — SPRINT 4
+                PLANNED
               </span>
             </div>
-            <h4 className="font-semibold text-white mb-1">2. Coder Agent</h4>
+            <h4 className="font-semibold text-white mb-1">2. Coder Subsystem</h4>
             <p className="text-xs text-muted leading-relaxed">
               Synthesizes syntactically valid code diff patches and targeted unit tests matching codebase conventions.
             </p>
@@ -59,10 +59,10 @@ export default function DashboardHome() {
                 <ShieldCheck className="w-5 h-5" />
               </div>
               <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-purple-500/20 text-purple-400 border border-purple-500/30">
-                PLANNED — SPRINT 6
+                PLANNED
               </span>
             </div>
-            <h4 className="font-semibold text-white mb-1">3. Tester Agent</h4>
+            <h4 className="font-semibold text-white mb-1">3. Tester Subsystem</h4>
             <p className="text-xs text-muted leading-relaxed">
               Executes tests inside isolated Docker Sandbox containers, parsing tracebacks for auto-repair loops.
             </p>
@@ -75,10 +75,10 @@ export default function DashboardHome() {
                 <GitPullRequest className="w-5 h-5" />
               </div>
               <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                PLANNED — SPRINT 6
+                PLANNED
               </span>
             </div>
-            <h4 className="font-semibold text-white mb-1">4. Reviewer Agent</h4>
+            <h4 className="font-semibold text-white mb-1">4. Reviewer Subsystem</h4>
             <p className="text-xs text-muted leading-relaxed">
               Evaluates security, code quality, and criteria compliance before human PR approval.
             </p>

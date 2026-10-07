@@ -1,15 +1,17 @@
-# DevSquad Complete System Architecture Diagram
+# DevSquad System Architecture Blueprint
 
-> **Document Version**: 1.0 (Sprint 1 Checkpoint)  
-> **Location**: `docs/architecture/system_architecture.md`  
+> **System Blueprint**: DevSquad Platform Architecture  
+> **Document Status**: Active Technical Specification  
 
 ---
 
-## 1. End-to-End System Architecture
+## 1. System Context & Overview
+
+**DevSquad** is designed as a modular, event-driven platform for automated software engineering workflows. The platform combines a modern reactive web dashboard, an asynchronous REST API, a relational datastore, and a stateful AI orchestration engine.
 
 ```
                     +----------------------------------+
-                    |           USER / DEVELOPER       |
+                    |          USER DEVELOPER          |
                     +----------------------------------+
                                      |
                                      v
@@ -45,9 +47,9 @@
      v           v           v           v
 +---------+ +---------+ +---------+ +----------+
 | PLANNER | |  CODER  | | TESTER  | | REVIEWER |
-|  AGENT  | |  AGENT  | |  AGENT  | |  AGENT   |
+| SUBSYS  | | SUBSYS  | | SUBSYS  | | SUBSYS   |
 | (PLANNED| | (PLANNED| | (PLANNED| | (PLANNED |
-| Sprint3)| | Sprint4)| | Sprint6)| | Sprint6) |
+| FEATURE)| | FEATURE)| | FEATURE)| | FEATURE) |
 +---------+ +---------+ +---------+ +----------+
      |           |           |           |
      +-----------+-----+-----+-----------+
@@ -64,8 +66,8 @@
 +------------------+       +-------------------+
 |  GITHUB API      |       |  DOCKER SANDBOX   |
 | (REST / App API) |       | (Resource Capped  |
-| [PLANNED SPRINT2]|       |  Ephemeral Cont.) |
-+------------------+       | [PLANNED SPRINT5] |
+| [PLANNED FEATURE]|       |  Ephemeral Cont.) |
++------------------+       | [PLANNED FEATURE] |
                            +-------------------+
 ```
 
@@ -75,10 +77,10 @@
 
 ```mermaid
 graph TD
-    subgraph Layer 1: Frontend - IMPLEMENTED
+    subgraph Layer 1: Client Dashboard - IMPLEMENTED
         F1["Next.js 14 Dashboard Shell"]
-        F2["System Health Status Card"]
-        F3["Responsive Navigation & Layout"]
+        F2["System Health Diagnostics Card"]
+        F3["Responsive Navigation Layout"]
     end
 
     subgraph Layer 2: API Gateway - IMPLEMENTED
@@ -88,19 +90,19 @@ graph TD
         A4["Pydantic Configuration Engine"]
     end
 
-    subgraph Layer 3: Persistence - IMPLEMENTED
+    subgraph Layer 3: Datastore - IMPLEMENTED
         D1["PostgreSQL / SQLite Async Engine"]
         D2["8 SQLAlchemy Core ORM Models"]
     end
 
-    subgraph Layer 4: Multi-Agent Orchestrator - PLANNED (Sprints 3-6)
-        O1["Planner Agent Node"]
-        O2["Coder Agent Node"]
-        O3["Tester Agent Node"]
-        O4["Reviewer Agent Node"]
+    subgraph Layer 4: Orchestrator - PLANNED
+        O1["Planner Subsystem"]
+        O2["Coder Subsystem"]
+        O3["Tester Subsystem"]
+        O4["Reviewer Subsystem"]
     end
 
-    subgraph Layer 5: Sandbox & Integrations - PLANNED (Sprints 2 & 5)
+    subgraph Layer 5: Sandbox & Integrations - PLANNED
         I1["GitHub OAuth & Issue API"]
         I2["Docker Ephemeral Sandbox"]
         I3["GitHub PR Workflow Engine"]

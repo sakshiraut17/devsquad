@@ -76,7 +76,7 @@ export const SystemHealthCard: React.FC = () => {
           </p>
           <p className="text-[11px] text-amber-400 mt-1 flex items-center gap-1">
             <AlertTriangle className="w-3 h-3" />
-            <span>API Key Pending (Planned Sprints 3–6)</span>
+            <span>API Key Pending (Config Layer Ready)</span>
           </p>
         </div>
 
@@ -88,7 +88,7 @@ export const SystemHealthCard: React.FC = () => {
               Docker Sandbox Runner
             </span>
             <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider bg-purple-500/20 text-purple-400 border border-purple-500/30">
-              PLANNED (SPRINT 5)
+              PLANNED
             </span>
           </div>
           <p className="text-sm font-semibold text-white">
@@ -96,7 +96,7 @@ export const SystemHealthCard: React.FC = () => {
           </p>
           <p className="text-[11px] text-purple-300 mt-1 flex items-center gap-1">
             <Clock className="w-3 h-3" />
-            <span>Execution Sandbox Scheduled Sprint 5</span>
+            <span>Execution Sandbox Scheduled</span>
           </p>
         </div>
       </div>

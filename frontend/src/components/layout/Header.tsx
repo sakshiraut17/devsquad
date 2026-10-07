@@ -1,5 +1,5 @@
 import React from 'react';
-import { GitBranch, Layers, Github } from 'lucide-react';
+import { Layers, Github } from 'lucide-react';
 
 export const Header: React.FC = () => {
   return (
@@ -8,8 +8,8 @@ export const Header: React.FC = () => {
         <span className="text-sm font-semibold text-white">DevSquad Console</span>
         <span className="text-gray-600">/</span>
         <div className="flex items-center space-x-2 text-xs bg-card px-2.5 py-1 rounded-full text-muted border border-border">
-          <GitBranch className="w-3.5 h-3.5 text-primary" />
-          <span>v0.1.0-foundation (Sprint 1 Target)</span>
+          <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+          <span>Core Engineering Baseline</span>
         </div>
       </div>
 
