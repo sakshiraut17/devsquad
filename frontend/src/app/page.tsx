@@ -1,6 +1,7 @@
 import React from 'react';
 import { SprintBanner } from '@/components/dashboard/SprintBanner';
 import { SystemHealthCard } from '@/components/dashboard/SystemHealthCard';
+import { RepositorySelector } from '@/components/dashboard/RepositorySelector';
 import { GitPullRequest, ShieldCheck, Terminal, Layers } from 'lucide-react';
 
 export default function DashboardHome() {
@@ -11,6 +12,9 @@ export default function DashboardHome() {
 
       {/* Infrastructure Health Status */}
       <SystemHealthCard />
+
+      {/* Real GitHub Repository & Issue Context Explorer */}
+      <RepositorySelector />
 
       {/* Agent Workflow Architecture Overview */}
       <div className="space-y-3">
