@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, TYPE_CHECKING
 from sqlalchemy import String, DateTime, ForeignKey, Text, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -26,7 +26,9 @@ class Issue(Base):
     body: Mapped[str] = mapped_column(Text, nullable=True)
     state: Mapped[str] = mapped_column(String(50), default="open", nullable=False)
 
-    synced_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+    )
 
     repository: Mapped["Repository"] = relationship("Repository", back_populates="issues")
     runs: Mapped[List["Run"]] = relationship(

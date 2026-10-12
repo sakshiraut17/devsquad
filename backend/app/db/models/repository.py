@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, TYPE_CHECKING
 from sqlalchemy import String, DateTime, ForeignKey, Boolean, BigInteger
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -28,7 +28,7 @@ class Repository(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     connected_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, nullable=False
+        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )
 
     user: Mapped["User"] = relationship("User", back_populates="repositories")

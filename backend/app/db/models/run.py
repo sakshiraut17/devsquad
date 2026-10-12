@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional, TYPE_CHECKING
 from sqlalchemy import String, DateTime, ForeignKey, Integer, Numeric
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -36,7 +36,9 @@ class Run(Base):
     total_tokens_used: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     estimated_cost_usd: Mapped[float] = mapped_column(Numeric(10, 4), default=0.0000, nullable=False)
 
-    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+    )
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     repository: Mapped["Repository"] = relationship("Repository", back_populates="runs")
