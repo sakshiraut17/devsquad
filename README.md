@@ -13,42 +13,46 @@ GitHub Issue → Repository Context → Planner → Coder → Sandbox Tester →
 
 ```text
 Devsquard/
-├── backend/
+├── backend/                             # FastAPI Backend Engine & LangGraph Multi-Agent System
 │   ├── app/
-│   │   ├── main.py              # FastAPI application entrypoint with CORS & lifespan
+│   │   ├── main.py                      # FastAPI application entrypoint with CORS & lifespan
 │   │   ├── api/
-│   │   │   ├── router.py        # Central API v1 router
-│   │   │   └── routes/          # Health, Repositories, Issues, Runs (including Orchestration API)
-│   │   ├── core/
-│   │   │   ├── config.py        # Centralized Pydantic V2 settings & secret masking
-│   │   │   ├── logging.py       # Structured logging with SecretRedactionFilter
-│   │   │   ├── security.py      # Secret redaction, safe relative path checks, SHA-256
-│   │   │   └── exceptions.py    # Core domain exception hierarchy
-│   │   ├── db/
-│   │   │   ├── base.py          # SQLAlchemy 2.0 Base & TimestampMixin
-│   │   │   ├── session.py       # Async engine & session factory with SQLite PRAGMA
-│   │   │   └── models/          # 8 core entities (User, Repo, Issue, Run, Patch, PR, Approval, AgentLog)
-│   │   ├── schemas/             # Pydantic V2 typed domain contracts
-│   │   ├── services/            # Core Platform Services
-│   │   │   ├── health_service.py    # Subsystem connectivity checks (DB, LLM, Docker)
-│   │   │   ├── github_service.py    # Read-only async GitHub client
-│   │   │   ├── context_ranker.py    # Multi-signal context selection & budgeting
-│   │   │   ├── llm/                 # LLM provider abstraction (Gemini, OpenAI)
-│   │   │   └── agents/              # Multi-Agent Services (Planner, Coder, Tester, Reviewer)
-│   │   └── orchestration/       # LangGraph Orchestrator & State Persistence
-│   │       ├── state.py         # DevSquadState, WorkflowStatus & WorkflowStage enums
-│   │       ├── checkpointer.py  # AsyncSqliteSaver & InMemorySaver checkpointer factory
-│   │       ├── nodes.py         # Asynchronous node execution functions
-│   │       ├── routing.py       # Conditional edge routing & bounded repair cycles
-│   │       ├── graph.py         # StateGraph construction & compilation
-│   │       ├── service.py       # DevSquadOrchestrator facade (start, resume, cancel, state)
-│   │       └── exceptions.py    # Orchestration exception hierarchy
-│   ├── alembic/                 # Async database migrations
-│   ├── tests/                   # Pytest suite (unit, integration, security, orchestration)
-│   ├── alembic.ini              # Alembic migration configuration
-│   ├── pyproject.toml           # Backend dependency manifest and tooling configs
-│   └── .env.example             # Environment template
-├── IMPLEMENTATION_STATUS.md     # Honest progress tracking report
+│   │   │   ├── router.py                # Central API v1 router
+│   │   │   └── routes/                  # Health, Repositories, Issues, Runs, Auth
+│   │   ├── core/                        # Config, Logging, Security, Secret Masking
+│   │   ├── db/                          # SQLAlchemy 2.0 async engine, sessions, 8 core models
+│   │   ├── schemas/                     # Pydantic V2 validated domain contracts
+│   │   ├── services/                    # GitHub API, Context Ranker, LLM providers (Gemini/OpenAI)
+│   │   │   └── agents/                  # Planner, Coder, Tester, Reviewer agents
+│   │   └── orchestration/               # LangGraph StateGraph, Checkpointers & Node Routing
+│   ├── alembic/                         # Async database migrations
+│   ├── tests/                           # Complete test suite (179 tests: unit, integration, security)
+│   ├── pyproject.toml                   # Python dependencies & tooling
+│   └── .env.example                     # Backend environment configuration template
+├── frontend/                            # Next.js 14 Production Frontend (App Router, TypeScript)
+│   ├── app/                             # Next.js App Router Pages
+│   │   ├── page.tsx                     # Command Center dashboard with live system metrics
+│   │   ├── login/page.tsx               # Maintainer Access authentication portal
+│   │   ├── repositories/page.tsx        # Connected repository browser
+│   │   ├── issues/page.tsx              # GitHub issues stream & dispatch modal
+│   │   ├── runs/page.tsx                # Agent runs history & monitoring
+│   │   ├── runs/[id]/page.tsx           # Live execution traces & agent flow stepper
+│   │   ├── patches/page.tsx             # Patch Laboratory with unified diff viewer & approval gate
+│   │   ├── health/page.tsx              # System diagnostics & health probe monitor
+│   │   ├── logs/page.tsx                # Security audit & system logs
+│   │   └── settings/page.tsx            # Maintainer configuration & environment checks
+│   ├── components/                      # Reusable UI component hierarchy
+│   │   ├── agents/                      # Visual agent flow diagrams & execution nodes
+│   │   ├── runs/                        # GroundedPlanCard, ReviewerCard, TestResultCard, Dispatcher
+│   │   ├── patches/                     # Unified DiffViewer & Cryptographic ApprovalModal
+│   │   └── layout/                      # Navbar, Sidebar, StatusBadge, DevSquadLogo
+│   ├── lib/                             # Typed API client, authentication session management
+│   ├── tests/                           # Frontend verification test suite
+│   ├── tailwind.config.ts               # Custom Charcoal & Lime Green design system
+│   └── .env.example                     # Frontend environment configuration template
+├── teacher_demonstration_guide.md       # Complete Teacher Demonstration Walkthrough
+├── final_verification_report.md         # End-to-end verification audit report (100% passed)
+├── IMPLEMENTATION_STATUS.md             # Implementation milestone status report
 └── README.md
 ```
 
@@ -99,57 +103,86 @@ All `/api/v1/runs` endpoints enforce HMAC-SHA256 Bearer token authentication and
 ### Prerequisites
 
 1. **Python**: Python 3.11+ (Python 3.13.1 verified).
-2. **Git**: Ensure Git is installed. If missing:
+2. **Node.js**: Node.js 18+ & npm.
+3. **Git**: Ensure Git is installed. If missing:
    ```powershell
    winget install --id Git.Git -e --source winget
    ```
-3. **Docker Desktop** *(Optional)*: If running, container-isolated tests execute in Docker; if unavailable, DevSquad falls back cleanly to AST static analysis.
+4. **Docker Desktop** *(Optional)*: If running, container-isolated tests execute in Docker; if unavailable, DevSquad falls back cleanly to AST static analysis.
 
-### Installation
+### Installation & Setup
 
-1. Create and activate a Python virtual environment:
-   ```powershell
-   python -m venv .venv
-   .\.venv\Scripts\Activate.ps1
-   ```
-
-2. Install backend dependencies:
-   ```powershell
-   cd backend
-   pip install -e .
-   pip install -e ".[dev]"
-   ```
-
-3. Setup environment variables:
-   ```powershell
-   copy .env.example .env
-   ```
-
-4. Run database migrations:
-   ```powershell
-   alembic upgrade head
-   ```
-
----
-
-## Running Automated Tests
-
-Run the full test suite with coverage:
+#### 1. Backend Setup
 ```powershell
+# Create & activate virtual environment
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+
+# Install backend dependencies
 cd backend
-pytest --cov=app --cov-report=term-missing
+pip install -e .
+pip install -e ".[dev]"
+
+# Configure environment variables
+copy .env.example .env
+
+# Run database migrations
+alembic upgrade head
+```
+
+#### 2. Frontend Setup
+```powershell
+# Navigate to frontend and install dependencies
+cd frontend
+npm install
+
+# Configure environment variables
+copy .env.example .env.local
 ```
 
 ---
 
-## Starting the Backend Server
+## Running Automated Verification
 
-Start the FastAPI application with Uvicorn:
+### Backend Pytest Suite (179 passing tests)
+```powershell
+cd backend
+pytest -v
+```
+
+### Frontend Test Suite & Linting (100% passing, 0 errors)
+```powershell
+cd frontend
+npm test
+npm run lint
+npx tsc --noEmit
+```
+
+---
+
+## Starting the Platform
+
+### 1. Launch FastAPI Backend Engine
 ```powershell
 cd backend
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
-
 - API root: [http://127.0.0.1:8000/](http://127.0.0.1:8000/)
-- Swagger documentation: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
-- Composite health check: [http://127.0.0.1:8000/api/v1/health](http://127.0.0.1:8000/api/v1/health)
+- Interactive Swagger UI: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+- Diagnostics & Health Check: [http://127.0.0.1:8000/api/v1/health](http://127.0.0.1:8000/api/v1/health)
+
+### 2. Launch Next.js Production UI
+```powershell
+cd frontend
+npm run dev
+```
+- Web Application: [http://localhost:3000/](http://localhost:3000/)
+- Maintainer Portal: [http://localhost:3000/login](http://localhost:3000/login)
+- Patch Laboratory: [http://localhost:3000/patches](http://localhost:3000/patches)
+
+---
+
+## Academic Demonstration & Verification Reports
+
+- **Demonstration Walkthrough:** Review [`teacher_demonstration_guide.md`](./teacher_demonstration_guide.md) for step-by-step guidance on live execution, agent stages, and approval gates.
+- **Verification Audit:** Review [`final_verification_report.md`](./final_verification_report.md) for full test metrics, diagnostic results, and architectural compliance evidence.
