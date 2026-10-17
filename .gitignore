@@ -98,3 +98,8 @@ desktop.ini
 # Docker sandbox temporary artifacts
 sandbox_workspaces/
 sandbox_temp/
+
+# Internal demo guides & evaluation audits
+teacher_demonstration_guide.md
+final_verification_report.md
+

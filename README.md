@@ -50,8 +50,6 @@ Devsquard/
 │   ├── tests/                           # Frontend verification test suite
 │   ├── tailwind.config.ts               # Custom Charcoal & Lime Green design system
 │   └── .env.example                     # Frontend environment configuration template
-├── teacher_demonstration_guide.md       # Complete Teacher Demonstration Walkthrough
-├── final_verification_report.md         # End-to-end verification audit report (100% passed)
 ├── IMPLEMENTATION_STATUS.md             # Implementation milestone status report
 └── README.md
 ```
@@ -179,10 +177,3 @@ npm run dev
 - Web Application: [http://localhost:3000/](http://localhost:3000/)
 - Maintainer Portal: [http://localhost:3000/login](http://localhost:3000/login)
 - Patch Laboratory: [http://localhost:3000/patches](http://localhost:3000/patches)
-
----
-
-## Academic Demonstration & Verification Reports
-
-- **Demonstration Walkthrough:** Review [`teacher_demonstration_guide.md`](./teacher_demonstration_guide.md) for step-by-step guidance on live execution, agent stages, and approval gates.
-- **Verification Audit:** Review [`final_verification_report.md`](./final_verification_report.md) for full test metrics, diagnostic results, and architectural compliance evidence.
