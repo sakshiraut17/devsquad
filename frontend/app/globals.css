@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #0B0D0F;
+  --surface: #14181C;
+  --surface-elevated: #1D242A;
+  --text-primary: #F1F4ED;
+  --text-secondary: #87919A;
+  --border-subtle: #242C34;
+  --border-strong: #333D48;
+  --forge-lime: #D7FF64;
+  --ultraviolet: #A78BFA;
+  --ice-cyan: #65E4F3;
+  --amber: #FFB454;
+}
+
+html,
+body {
+  color: #F1F4ED;
+  background-color: #0B0D0F;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+/* Engineering Control Room Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0B0D0F;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #242C34;
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #333D48;
+}
+
+/* Code & diff styling */
+pre, code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
