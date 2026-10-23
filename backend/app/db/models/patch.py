@@ -10,6 +10,8 @@ if TYPE_CHECKING:
     from app.db.models.run import Run
     from app.db.models.pull_request import PullRequest
     from app.db.models.approval_record import ApprovalRecord
+    from app.db.models.security_finding import SecurityFinding
+    from app.db.models.security_scan_record import SecurityScanRecord
 
 
 class Patch(Base):
@@ -72,6 +74,14 @@ class Patch(Base):
     )
     approval_records: Mapped[list["ApprovalRecord"]] = relationship(
         "ApprovalRecord",
+        back_populates="patch",
+    )
+    security_findings: Mapped[list["SecurityFinding"]] = relationship(
+        "SecurityFinding",
+        back_populates="patch",
+    )
+    security_scans: Mapped[list["SecurityScanRecord"]] = relationship(
+        "SecurityScanRecord",
         back_populates="patch",
     )
 

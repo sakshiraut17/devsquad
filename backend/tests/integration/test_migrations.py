@@ -38,13 +38,15 @@ async def test_migration_upgrade_from_empty_database():
                 "patches",
                 "approval_records",
                 "pull_requests",
+                "security_findings",
+                "security_scan_records",
             }
             assert expected.issubset(tables)
 
-            # Verify alembic_version has the initial revision
+            # Verify alembic_version has the latest revision
             ver_res = await conn.execute(text("SELECT version_num FROM alembic_version;"))
             version_num = ver_res.scalar()
-            assert version_num == "1a0c41410573"
+            assert version_num == "2b1a52821684"
 
         await engine.dispose()
     finally:

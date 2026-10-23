@@ -148,6 +148,20 @@ export default function DiagnosticsPage() {
                 authorization_gates: "ENFORCED",
               }}
             />
+
+            {/* 7. AI Security Guardian Verification Subsystem */}
+            <HealthCard
+              title="AI Security Guardian Subsystem"
+              status={health?.components?.security_guardian?.status || "operational"}
+              latencyMs={0.5}
+              description={health?.components?.security_guardian?.message || "Mandatory AI Security Guardian gate with deterministic secret scanner, Python AST static analyzer, Bandit security scanner, dependency auditor, and regression detection."}
+              details={health?.components?.security_guardian?.details || {
+                policy_version: "1.0.0",
+                mandatory_blockers_enforced: true,
+                scanners_available: "secret_scanner, ast_visitor, dependency_auditor, regression_scanner, bandit",
+                gate_enforcement: "MANDATORY (Blocks human approval on critical/high)",
+              }}
+            />
           </div>
         )}
       </main>

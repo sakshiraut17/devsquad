@@ -20,6 +20,7 @@ import { GroundedPlanCard } from "@/components/runs/GroundedPlanCard";
 import { RepositoryContextCard } from "@/components/runs/RepositoryContextCard";
 import { TestResultCard } from "@/components/runs/TestResultCard";
 import { ReviewerCard } from "@/components/runs/ReviewerCard";
+import { SecurityGuardianCard } from "@/components/runs/SecurityGuardianCard";
 import { DiffViewer } from "@/components/patches/DiffViewer";
 import { ApprovalModal } from "@/components/patches/ApprovalModal";
 import { api } from "@/lib/api/client";
@@ -28,6 +29,7 @@ import {
   ApprovalRecord,
   Patch,
   Run,
+  SecurityScanResult,
   WorkflowStateSnapshot,
 } from "@/types";
 import { formatDate, truncateHash } from "@/lib/utils";
@@ -38,6 +40,7 @@ export default function RunDetailPage() {
 
   const [run, setRun] = useState<Run | null>(null);
   const [stateSnapshot, setStateSnapshot] = useState<WorkflowStateSnapshot | null>(null);
+  const [securityScan, setSecurityScan] = useState<SecurityScanResult | null>(null);
   const [events, setEvents] = useState<AgentEvent[]>([]);
   const [patches, setPatches] = useState<Patch[]>([]);
   const [approvals, setApprovals] = useState<ApprovalRecord[]>([]);
@@ -53,13 +56,14 @@ export default function RunDetailPage() {
     if (!runId) return;
     setError(null);
     try {
-      const [runData, stateData, eventsData, patchesData, approvalsData] =
+      const [runData, stateData, eventsData, patchesData, approvalsData, securityData] =
         await Promise.all([
           api.getRun(runId),
           api.getRunState(runId),
           api.getRunEvents(runId),
           api.getRunPatches(runId),
           api.getRunApprovals(runId),
+          api.getRunSecurity(runId).catch(() => null),
         ]);
 
       setRun(runData);
@@ -67,6 +71,9 @@ export default function RunDetailPage() {
       setEvents(eventsData);
       setPatches(patchesData);
       setApprovals(approvalsData);
+      if (securityData) {
+        setSecurityScan(securityData);
+      }
 
       if (patchesData.length > 0 && !selectedPatch) {
         setSelectedPatch(patchesData[patchesData.length - 1]);
@@ -234,6 +241,12 @@ export default function RunDetailPage() {
             {stateSnapshot?.state?.review && (
               <ReviewerCard review={stateSnapshot.state.review} />
             )}
+
+            {/* AI Security Guardian Verification Gate */}
+            <SecurityGuardianCard
+              security={securityScan || (stateSnapshot?.state?.security_result as any)}
+              isLoading={loading && !securityScan}
+            />
 
             {/* Failed Patches & Anti-Repetition Registry History */}
             {stateSnapshot?.state?.failed_patch_registry && stateSnapshot.state.failed_patch_registry.length > 0 && (
@@ -500,6 +513,8 @@ export default function RunDetailPage() {
             baseCommitSha={stateSnapshot?.state?.repository_context?.base_commit_sha}
             reviewerRecommendation={reviewState?.recommendation}
             hasBlockingReviewFindings={hasBlockingFindings}
+            securityGateStatus={securityScan?.status || (stateSnapshot?.state?.security_result as any)?.status}
+            securityBlockReasons={securityScan?.block_reasons || (stateSnapshot?.state?.security_result as any)?.block_reasons || []}
           />
         )}
       </main>

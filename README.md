@@ -68,8 +68,10 @@ flowchart TD
     planner -->|Plan Generated| coder[coder_node\nSynthesize Minimal Diff Patch]
     planner -->|Planning Failed| finalization
 
-    coder -->|Patch Applied| tester[sandbox_tester_node\nDocker Isolation / AST Fallback]
-    coder -->|Patch Gen Failed| finalization
+    coder -->|Patch Applied| security[security_guardian_node\nAI Security Guardian Verification Gate]
+    security -->|Security Gate Passed| tester[sandbox_tester_node\nDocker Isolation / AST Fallback]
+    security -->|Security Blocked\n& attempts < max| coder
+    security -->|Security Blocked\n& attempts >= max| finalization
 
     tester --> reviewer[reviewer_node\nIndependent Multi-Angle Review]
 
@@ -80,6 +82,19 @@ flowchart TD
     finalization -->|Success / Valid Patch| WAITING_APPROVAL([WAITING_FOR_APPROVAL\nHuman Decision Gate])
     finalization -->|Failures / Errors| FAILED([FAILED])
 ```
+
+---
+
+## AI Security Guardian (Mandatory Verification Gate)
+
+DevSquad incorporates an automated **AI Security Guardian** pipeline that analyzes patches immediately after synthesis by the Coder Agent, prior to sandbox execution and human approval.
+
+### Security Scanner Suite
+- **Deterministic Secret Scanner:** Intercepts high-confidence credentials (AWS Access Keys, GitHub PATs, OpenAI API keys, Slack tokens, private keys) and deterministically hashes them with SHA-256 (`[REDACTED_SECRET:<hash>]`). Raw secrets are never stored in databases or emitted in API responses.
+- **AST Source Code Scanner:** Python AST analyzer detecting unparameterized SQL queries (`.execute(f"...")`, `%`, `+`), command injection (`subprocess(..., shell=True)`, `os.system`), dynamic code execution (`eval`/`exec`), insecure deserialization (`pickle.loads`, unconstrained `yaml.load`), and weak crypto hashes (`md5`/`sha1`).
+- **Dependency Risk Auditor:** Deterministic offline heuristic scanner for manifests (`requirements.txt`, `pyproject.toml`, `package.json`), detecting obsolete/vulnerable packages (`pycrypto`, `pickle5`, `telnetlib`), plaintext repository URLs (`--index-url http://...`), and wildcard version pinning (`*`).
+- **Security Regression & Scope Guard:** Flags removal of essential security dependencies (such as `Depends(get_current_user)` or `verify_stream_ticket`) and modifications to protected infrastructure files (`.env`, `alembic.ini`).
+- **Policy Engine & Server-Side Gate:** Strictly enforces fail-closed human approval. The approval endpoint (`POST /api/v1/runs/{id}/approve`) rejects any patch without a matching, pristine `SecurityScanRecord` where `status == 'PASSED'` and `critical_count == 0` and `high_count == 0`.
 
 ---
 

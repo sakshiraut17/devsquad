@@ -30,11 +30,46 @@ def route_after_planner(state: DevSquadState) -> Literal["coder_node", "finaliza
     return "coder_node"
 
 
-def route_after_coder(state: DevSquadState) -> Literal["sandbox_tester_node", "finalization_node"]:
-    """Route after patch generation."""
+def route_after_coder(state: DevSquadState) -> Literal["security_guardian_node", "finalization_node"]:
+    """Route after patch generation: proceed to Security Guardian for mandatory evaluation."""
     if state.get("status") in (WorkflowStatus.FAILED.value, WorkflowStatus.CANCELLED.value) or not state.get("current_patch"):
         return "finalization_node"
-    return "sandbox_tester_node"
+    return "security_guardian_node"
+
+
+def route_after_security(state: DevSquadState) -> Literal["sandbox_tester_node", "coder_node", "finalization_node"]:
+    """Route after security evaluation: proceed to tester if passed, or trigger bounded repair if blocked."""
+    run_id = state.get("run_id")
+    if state.get("status") in (WorkflowStatus.FAILED.value, WorkflowStatus.CANCELLED.value):
+        return "finalization_node"
+
+    sec_result = state.get("security_result")
+    if not sec_result:
+        return "finalization_node"
+
+    can_approve = sec_result.get("can_approve", True)
+    status_val = sec_result.get("status")
+
+    if status_val == "PASSED" and can_approve:
+        logger.info(f"[routing] Run {run_id} passed Security Guardian gate -> sandbox_tester_node.")
+        return "sandbox_tester_node"
+
+    # Security blocked: check if repair cycle can be attempted
+    current_attempts = state.get("repair_attempts", 0)
+    max_attempts = state.get("max_repair_attempts", settings.max_agent_retries)
+
+    if current_attempts < max_attempts:
+        logger.info(
+            f"[routing] Run {run_id} blocked by Security Guardian (attempt {current_attempts + 1} of {max_attempts}). "
+            f"Routing back to coder_node for security repair."
+        )
+        return "coder_node"
+    else:
+        logger.warning(
+            f"[routing] Run {run_id} exhausted repair attempts on security failure ({max_attempts}). "
+            f"Routing to finalization_node."
+        )
+        return "finalization_node"
 
 
 def route_after_tester(state: DevSquadState) -> Literal["reviewer_node", "finalization_node"]:

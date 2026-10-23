@@ -6,6 +6,7 @@ from app.orchestration.routing import (
     route_after_context,
     route_after_planner,
     route_after_reviewer,
+    route_after_security,
     route_after_tester,
     route_after_validation,
 )
@@ -30,10 +31,39 @@ def test_route_after_planner():
 
 def test_route_after_coder():
     state_ok: DevSquadState = {"status": WorkflowStatus.RUNNING.value, "current_patch": {"unified_diff": "..."}}
-    assert route_after_coder(state_ok) == "sandbox_tester_node"
+    assert route_after_coder(state_ok) == "security_guardian_node"
 
     state_no_patch: DevSquadState = {"status": WorkflowStatus.RUNNING.value, "current_patch": None}
     assert route_after_coder(state_no_patch) == "finalization_node"
+
+
+def test_route_after_security():
+    # Passed security -> sandbox_tester_node
+    state_passed: DevSquadState = {
+        "status": WorkflowStatus.RUNNING.value,
+        "security_result": {"status": "PASSED"},
+        "repair_attempts": 0,
+        "max_repair_attempts": 3,
+    }
+    assert route_after_security(state_passed) == "sandbox_tester_node"
+
+    # Blocked security -> coder_node for repair
+    state_blocked: DevSquadState = {
+        "status": WorkflowStatus.RUNNING.value,
+        "security_result": {"status": "BLOCKED"},
+        "repair_attempts": 0,
+        "max_repair_attempts": 3,
+    }
+    assert route_after_security(state_blocked) == "coder_node"
+
+    # Blocked security with max repair attempts reached -> finalization_node
+    state_blocked_exhausted: DevSquadState = {
+        "status": WorkflowStatus.RUNNING.value,
+        "security_result": {"status": "BLOCKED"},
+        "repair_attempts": 3,
+        "max_repair_attempts": 3,
+    }
+    assert route_after_security(state_blocked_exhausted) == "finalization_node"
 
 
 def test_route_after_tester():

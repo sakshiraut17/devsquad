@@ -12,6 +12,7 @@ from app.orchestration.nodes import (
     planner_node,
     reviewer_node,
     sandbox_tester_node,
+    security_guardian_node,
     validate_input_node,
 )
 from app.orchestration.routing import (
@@ -19,6 +20,7 @@ from app.orchestration.routing import (
     route_after_context,
     route_after_planner,
     route_after_reviewer,
+    route_after_security,
     route_after_tester,
     route_after_validation,
 )
@@ -36,6 +38,7 @@ def build_devsquad_graph() -> StateGraph:
     builder.add_node("context_preparation_node", context_preparation_node)
     builder.add_node("planner_node", planner_node)
     builder.add_node("coder_node", coder_node)
+    builder.add_node("security_guardian_node", security_guardian_node)
     builder.add_node("sandbox_tester_node", sandbox_tester_node)
     builder.add_node("reviewer_node", reviewer_node)
     builder.add_node("finalization_node", finalization_node)
@@ -46,6 +49,7 @@ def build_devsquad_graph() -> StateGraph:
     builder.add_conditional_edges("context_preparation_node", route_after_context)
     builder.add_conditional_edges("planner_node", route_after_planner)
     builder.add_conditional_edges("coder_node", route_after_coder)
+    builder.add_conditional_edges("security_guardian_node", route_after_security)
     builder.add_conditional_edges("sandbox_tester_node", route_after_tester)
     builder.add_conditional_edges("reviewer_node", route_after_reviewer)
     builder.add_edge("finalization_node", END)

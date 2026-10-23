@@ -14,6 +14,8 @@ if TYPE_CHECKING:
     from app.db.models.agent_log import AgentLog
     from app.db.models.pull_request import PullRequest
     from app.db.models.approval_record import ApprovalRecord
+    from app.db.models.security_finding import SecurityFinding
+    from app.db.models.security_scan_record import SecurityScanRecord
 
 
 class RunStatus(str, enum.Enum):
@@ -22,6 +24,7 @@ class RunStatus(str, enum.Enum):
     INGESTING = "INGESTING"
     PLANNING = "PLANNING"
     CODING = "CODING"
+    SECURITY_SCANNING = "SECURITY_SCANNING"
     TESTING = "TESTING"
     REVIEWING = "REVIEWING"
     AWAITING_APPROVAL = "AWAITING_APPROVAL"
@@ -115,4 +118,16 @@ class Run(Base, TimestampMixin):
         back_populates="run",
         cascade="all, delete-orphan",
         order_by="ApprovalRecord.created_at",
+    )
+    security_findings: Mapped[list["SecurityFinding"]] = relationship(
+        "SecurityFinding",
+        back_populates="run",
+        cascade="all, delete-orphan",
+        order_by="SecurityFinding.created_at",
+    )
+    security_scans: Mapped[list["SecurityScanRecord"]] = relationship(
+        "SecurityScanRecord",
+        back_populates="run",
+        cascade="all, delete-orphan",
+        order_by="SecurityScanRecord.created_at",
     )

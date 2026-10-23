@@ -8,6 +8,8 @@ from app.db.models.agent_log import AgentLog
 from app.db.models.patch import Patch
 from app.db.models.pull_request import PullRequest
 from app.db.models.approval_record import ApprovalRecord
+from app.db.models.security_finding import SecurityFinding, SecuritySeverity, SecurityCategory
+from app.db.models.security_scan_record import SecurityScanRecord
 
 __all__ = [
     "Base",
@@ -22,4 +24,8 @@ __all__ = [
     "Patch",
     "PullRequest",
     "ApprovalRecord",
+    "SecurityFinding",
+    "SecuritySeverity",
+    "SecurityCategory",
+    "SecurityScanRecord",
 ]

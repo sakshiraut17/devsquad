@@ -161,6 +161,27 @@ class HealthService:
                 checked_at=checked_at,
             )
 
+    @staticmethod
+    def check_security_guardian() -> ComponentHealth:
+        """Check AI Security Guardian subsystem and scanner readiness."""
+        checked_at = datetime.now(timezone.utc)
+        from app.services.security_guardian import SecurityGuardianService
+        guardian = SecurityGuardianService()
+        diag = guardian.get_diagnostics()
+
+        return ComponentHealth(
+            component="security_guardian",
+            status="operational",
+            message="AI Security Guardian is active with mandatory blocking policy.",
+            details={
+                "policy_version": diag.policy_version,
+                "mandatory_blockers_enforced": diag.mandatory_blockers_enforced,
+                "scanners_available": [s.name for s in diag.scanners if s.available],
+                "bandit_active": any(s.name == "bandit" and s.available for s in diag.scanners),
+            },
+            checked_at=checked_at,
+        )
+
     @classmethod
     async def get_composite_health(cls, db: AsyncSession) -> HealthResponse:
         """Aggregate health check for all platform subsystems."""
@@ -168,11 +189,13 @@ class HealthService:
         db_health = await cls.check_database(db)
         llm_health = cls.check_llm()
         docker_health = cls.check_docker()
+        security_health = cls.check_security_guardian()
 
         components = {
             "database": db_health,
             "llm": llm_health,
             "docker": docker_health,
+            "security_guardian": security_health,
         }
 
         # Overall platform status determination

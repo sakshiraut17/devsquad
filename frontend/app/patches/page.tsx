@@ -16,8 +16,9 @@ import { Navbar } from "@/components/layout/Navbar";
 import { StatusBadge } from "@/components/layout/StatusBadge";
 import { DiffViewer } from "@/components/patches/DiffViewer";
 import { ApprovalModal } from "@/components/patches/ApprovalModal";
+import { SecurityGuardianCard } from "@/components/runs/SecurityGuardianCard";
 import { api } from "@/lib/api/client";
-import { AgentEvent, Patch, Run } from "@/types";
+import { AgentEvent, Patch, Run, SecurityScanResult } from "@/types";
 import { formatDate, truncateHash } from "@/lib/utils";
 
 interface PatchWithRun {
@@ -29,6 +30,7 @@ export default function PatchLaboratoryPage() {
   const [items, setItems] = useState<PatchWithRun[]>([]);
   const [selectedItem, setSelectedItem] = useState<PatchWithRun | null>(null);
   const [runEvents, setRunEvents] = useState<AgentEvent[]>([]);
+  const [securityScan, setSecurityScan] = useState<SecurityScanResult | null>(null);
   const [isApprovalOpen, setIsApprovalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
@@ -66,10 +68,15 @@ export default function PatchLaboratoryPage() {
   const selectPatch = async (item: PatchWithRun) => {
     setSelectedItem(item);
     try {
-      const evs = await api.getRunEvents(item.run.id);
+      const [evs, sec] = await Promise.all([
+        api.getRunEvents(item.run.id),
+        api.getRunSecurity(item.run.id).catch(() => null),
+      ]);
       setRunEvents(evs);
+      setSecurityScan(sec);
     } catch {
       setRunEvents([]);
+      setSecurityScan(null);
     }
   };
 
@@ -299,6 +306,9 @@ export default function PatchLaboratoryPage() {
                   </div>
                 </div>
 
+                {/* AI Security Guardian Gate Card */}
+                <SecurityGuardianCard security={securityScan} />
+
                 {/* Unified Diff Safe Viewer */}
                 <div className="space-y-2">
                   <h3 className="text-xs font-mono font-bold text-text-primary uppercase tracking-wider flex items-center gap-2">
@@ -329,6 +339,8 @@ export default function PatchLaboratoryPage() {
               setActionSuccess("Patch approval successfully submitted and audited.");
               loadPatches();
             }}
+            securityGateStatus={securityScan?.status}
+            securityBlockReasons={securityScan?.block_reasons}
           />
         )}
       </main>

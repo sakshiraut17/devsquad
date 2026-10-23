@@ -29,6 +29,7 @@ class WorkflowStage(str, enum.Enum):
     CONTEXT_PREPARATION = "CONTEXT_PREPARATION"
     PLANNING = "PLANNING"
     CODING = "CODING"
+    SECURITY_SCANNING = "SECURITY_SCANNING"
     TESTING = "TESTING"
     REVIEWING = "REVIEWING"
     REPAIRING = "REPAIRING"
@@ -47,6 +48,7 @@ class DevSquadState(TypedDict, total=False):
     plan: Optional[Dict[str, Any]]
     current_patch: Optional[Dict[str, Any]]
     patch_revision: int
+    security_result: Optional[Dict[str, Any]]
     test_result: Optional[Dict[str, Any]]
     review_result: Optional[Dict[str, Any]]
     repair_attempts: int
@@ -84,6 +86,7 @@ def create_initial_state(
         plan=None,
         current_patch=None,
         patch_revision=0,
+        security_result=None,
         test_result=None,
         review_result=None,
         repair_attempts=0,

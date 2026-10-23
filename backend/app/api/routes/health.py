@@ -30,3 +30,9 @@ async def get_llm_health() -> ComponentHealth:
 async def get_docker_health() -> ComponentHealth:
     """Check Docker daemon availability, reporting operational or honest fallback necessity."""
     return HealthService.check_docker()
+
+
+@router.get("/security", response_model=ComponentHealth)
+async def get_security_health() -> ComponentHealth:
+    """Check AI Security Guardian status, active scanners, and blocking policy."""
+    return HealthService.check_security_guardian()

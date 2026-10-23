@@ -11,6 +11,7 @@ from app.db.models import (
     Repository,
     Run,
     RunStatus,
+    SecurityScanRecord,
     User,
 )
 from app.orchestration import WorkflowStatus
@@ -183,6 +184,22 @@ async def test_tamper_evident_approval_verification(
         validation_status="VALIDATED",
     )
     test_db_session.add(patch)
+
+    sec_record = SecurityScanRecord(
+        id="sec-tamper-test",
+        run_id=run.id,
+        patch_id=patch.id,
+        patch_hash=genuine_hash,
+        status="PASSED",
+        critical_count=0,
+        high_count=0,
+        medium_count=0,
+        low_count=0,
+        info_count=0,
+        scanners_executed=["secret_scanner", "source_scanner"],
+        block_reasons=[],
+    )
+    test_db_session.add(sec_record)
     await test_db_session.commit()
 
     # 1. Tampered hash payload -> Must be rejected with 409 Conflict
@@ -232,6 +249,91 @@ async def test_tamper_evident_approval_verification(
     assert records[0].decision == "approved"
     assert records[0].patch_hash == genuine_hash
     assert records[0].feedback == "Approved for production merge after security review"
+
+
+@pytest.mark.asyncio
+async def test_approval_gate_rejects_without_security_guardian_scan(
+    test_db_session: AsyncSession,
+    async_client: AsyncClient,
+    default_user: User,
+):
+    """Approval endpoint fail-closed rejects approval if patch has no Security Guardian scan or is blocked."""
+    repo = Repository(
+        id="repo-sec-gate",
+        owner_id=default_user.id,
+        github_repository_id=9003,
+        full_name="devsquad/sec-gate",
+        default_branch="main",
+    )
+    test_db_session.add(repo)
+    await test_db_session.commit()
+
+    issue = Issue(
+        id="issue-sec-gate",
+        repository_id=repo.id,
+        github_issue_number=11,
+        title="Security gate test issue",
+        state="open",
+    )
+    test_db_session.add(issue)
+    await test_db_session.commit()
+
+    run = Run(
+        id="run-sec-gate",
+        repository_id=repo.id,
+        issue_id=issue.id,
+        status=RunStatus.AWAITING_APPROVAL.value,
+        current_node="reviewer",
+    )
+    test_db_session.add(run)
+    await test_db_session.commit()
+
+    patch_hash = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+    patch = Patch(
+        id="patch-sec-gate",
+        run_id=run.id,
+        revision=1,
+        unified_diff="--- a/f.py\n+++ b/f.py\n@@ -1 +1 @@\n-a\n+b\n",
+        target_files=["f.py"],
+        summary="Update f",
+        content_hash=patch_hash,
+        validation_status="VALIDATED",
+    )
+    test_db_session.add(patch)
+    await test_db_session.commit()
+
+    # 1. Without any SecurityScanRecord -> Rejected with 409
+    resp_no_scan = await async_client.post(
+        f"/api/v1/runs/{run.id}/approve",
+        json={"patch_id": patch.id, "decision": "approved", "patch_hash": patch_hash},
+    )
+    assert resp_no_scan.status_code == 409
+    assert "mandatory Security Guardian evaluation" in resp_no_scan.json()["detail"]
+
+    # 2. With BLOCKED SecurityScanRecord -> Rejected with 409
+    blocked_scan = SecurityScanRecord(
+        id="sec-blocked-rec",
+        run_id=run.id,
+        patch_id=patch.id,
+        patch_hash=patch_hash,
+        status="BLOCKED",
+        critical_count=1,
+        high_count=0,
+        medium_count=0,
+        low_count=0,
+        info_count=0,
+        scanners_executed=["secret_scanner"],
+        block_reasons=["High-confidence secret detected"],
+    )
+    test_db_session.add(blocked_scan)
+    await test_db_session.commit()
+
+    resp_blocked = await async_client.post(
+        f"/api/v1/runs/{run.id}/approve",
+        json={"patch_id": patch.id, "decision": "approved", "patch_hash": patch_hash},
+    )
+    assert resp_blocked.status_code == 409
+    assert "Security Guardian gate is BLOCKED" in resp_blocked.json()["detail"]
 
 
 @pytest.mark.asyncio

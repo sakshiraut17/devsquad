@@ -44,6 +44,7 @@ from app.services.github_service import (
 )
 from app.services.llm.base import LLMProvider
 from app.services.llm.factory import get_llm_provider
+from app.services.security_guardian import SecurityGuardianService
 
 logger = logging.getLogger("devsquad.nodes")
 
@@ -60,6 +61,7 @@ class NodeDependencies:
         coder_agent: Optional[CoderAgent] = None,
         tester_agent: Optional[SandboxTesterAgent] = None,
         reviewer_agent: Optional[ReviewerAgent] = None,
+        security_guardian: Optional[SecurityGuardianService] = None,
     ):
         self.session_factory = session_factory or async_session_factory
         self.llm_provider = llm_provider or (get_llm_provider() if settings.gemini_api_key.get_secret_value() or settings.openai_api_key.get_secret_value() else None)
@@ -68,6 +70,7 @@ class NodeDependencies:
         self.coder_agent = coder_agent or (CoderAgent(self.llm_provider) if self.llm_provider else None)
         self.tester_agent = tester_agent or SandboxTesterAgent()
         self.reviewer_agent = reviewer_agent or (ReviewerAgent(self.llm_provider) if self.llm_provider else None)
+        self.security_guardian = security_guardian or SecurityGuardianService(session_factory=self.session_factory)
 
 
 # Default shared dependencies
@@ -687,7 +690,8 @@ async def coder_node(state: DevSquadState) -> Dict[str, Any]:
         "current_patch": patch_dict,
         "patch_revision": current_rev,
         "repair_attempts": repair_attempts if current_rev == 1 else repair_attempts + 1,
-        # ATOMIC INVALIDATION OF DEPENDENT EVIDENCE:
+        # ATOMIC INVALIDATION OF DEPENDENT EVIDENCE (Security, Test, Review):
+        "security_result": None,
         "test_result": None,
         "review_result": None,
         "validation_status": "PENDING_VALIDATION",
@@ -695,7 +699,93 @@ async def coder_node(state: DevSquadState) -> Dict[str, Any]:
         "repair_feedback": None,
         "error_code": None,
         "error_message": None,
-        "current_stage": WorkflowStage.TESTING.value,
+        "current_stage": WorkflowStage.SECURITY_SCANNING.value,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+async def security_guardian_node(state: DevSquadState) -> Dict[str, Any]:
+    """Execute AI Security Guardian to evaluate patch for secrets, vulnerabilities, and regressions."""
+    if state.get("status") == WorkflowStatus.CANCELLED.value:
+        return {
+            "status": WorkflowStatus.CANCELLED.value,
+            "current_stage": WorkflowStage.FINALIZING.value,
+            "error_message": state.get("error_message") or "Run was cancelled.",
+        }
+
+    run_id = state["run_id"]
+    deps = get_default_deps()
+    patch_data = state.get("current_patch")
+    if not patch_data:
+        return {
+            "status": WorkflowStatus.FAILED.value,
+            "error_code": "SECURITY_SCAN_FAILED",
+            "error_message": "Current patch missing from workflow state for security evaluation.",
+            "current_stage": WorkflowStage.FINALIZING.value,
+        }
+
+    patch_item = PatchItem.model_validate(patch_data)
+    metadata = state.get("metadata", {})
+    source_files = metadata.get("source_files", {})
+    base_commit_sha = metadata.get("base_commit_sha", patch_item.base_commit_sha)
+
+    # Execute SecurityGuardianService
+    async with deps.session_factory() as session:
+        scan_result = await deps.security_guardian.scan_patch(
+            patch=patch_item,
+            run_id=run_id,
+            source_files=source_files,
+            base_commit_sha=base_commit_sha,
+            session=session,
+        )
+        run = await session.get(Run, run_id)
+        if run:
+            run.current_node = "security_guardian"
+            await session.commit()
+
+    # If blocked, record failure in anti-repetition registry
+    failed_entries = list(state.get("failed_patch_registry") or [])
+    registry = FailedPatchRegistry(entries=failed_entries)
+    repair_feedback = state.get("repair_feedback")
+
+    if not scan_result.can_approve or scan_result.status == "BLOCKED":
+        category = "SECURITY_GATE_BLOCKED"
+        reasons_summary = "; ".join(scan_result.block_reasons[:3])
+        registry.record_failure(
+            run_id=run_id,
+            repository_id=state.get("repository_id", ""),
+            base_commit_sha=base_commit_sha or "",
+            patch_hash=patch_item.content_hash,
+            revision=patch_item.revision,
+            failure_category=category,
+            diagnostic_fingerprint=reasons_summary or "Security blockers detected",
+            validation_environment="security_guardian",
+            details={
+                "critical": scan_result.summary.critical,
+                "high": scan_result.summary.high,
+                "findings_count": scan_result.summary.total,
+                "block_reasons": scan_result.block_reasons,
+            },
+        )
+        updated_failed_registry = registry.model_dump()["entries"]
+
+        # Build sanitized repair feedback for CoderAgent
+        feedback_lines = ["SECURITY GUARDIAN REPAIR REQUIRED:"]
+        for reason in scan_result.block_reasons:
+            feedback_lines.append(f"- {reason}")
+        for finding in scan_result.findings:
+            if finding.is_blocking:
+                loc = f" at {finding.file_path}:{finding.line_start}" if finding.file_path and finding.line_start else ""
+                feedback_lines.append(f"  * [{finding.severity}]{loc} {finding.title}: {finding.remediation or finding.description}")
+        repair_feedback = "\n".join(feedback_lines)
+    else:
+        updated_failed_registry = failed_entries
+
+    return {
+        "security_result": scan_result.model_dump(),
+        "repair_feedback": repair_feedback,
+        "failed_patch_registry": updated_failed_registry,
+        "current_stage": WorkflowStage.TESTING.value if scan_result.can_approve else WorkflowStage.REPAIRING.value,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -952,12 +1042,16 @@ async def finalization_node(state: DevSquadState) -> Dict[str, Any]:
 
     elif current_status == WorkflowStatus.RUNNING.value:
         # Centralized fail-closed validation before transitioning to approval
+        security_data = state.get("security_result")
         if not plan_data:
             final_status = WorkflowStatus.FAILED.value
             error_message = "Structured implementation plan is missing."
         elif not patch_data or not patch_data.get("unified_diff"):
             final_status = WorkflowStatus.FAILED.value
             error_message = "Valid code patch is missing."
+        elif not security_data:
+            final_status = WorkflowStatus.FAILED.value
+            error_message = "Mandatory Security Guardian verification evidence is missing."
         elif not test_data:
             final_status = WorkflowStatus.FAILED.value
             error_message = "Automated test validation results are missing."
@@ -989,7 +1083,18 @@ async def finalization_node(state: DevSquadState) -> Dict[str, Any]:
             test_base_sha = test_data.get("base_commit_sha")
             review_base_sha = review_data.get("base_commit_sha")
 
-            if test_patch_hash and test_patch_hash != curr_patch_hash:
+            sec_patch_hash = (security_data or {}).get("patch_hash")
+            if sec_patch_hash and sec_patch_hash != curr_patch_hash:
+                final_status = WorkflowStatus.FAILED.value
+                error_message = (
+                    f"Stale security evidence: security scan hash '{sec_patch_hash}' does not match "
+                    f"current patch hash '{curr_patch_hash}'."
+                )
+            elif (security_data or {}).get("status") != "PASSED" or (security_data or {}).get("can_approve", True) is False:
+                final_status = WorkflowStatus.FAILED.value
+                reasons = (security_data or {}).get("block_reasons", [])
+                error_message = f"Security Guardian gate blocked: {'; '.join(reasons) if reasons else 'Mandatory security checks failed.'}"
+            elif test_patch_hash and test_patch_hash != curr_patch_hash:
                 final_status = WorkflowStatus.FAILED.value
                 error_message = (
                     f"Stale validation evidence: test hash '{test_patch_hash}' does not match "

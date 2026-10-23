@@ -20,6 +20,8 @@ from app.db.models.issue import Issue
 from app.db.models.patch import Patch
 from app.db.models.repository import Repository
 from app.db.models.run import Run, RunStatus
+from app.db.models.security_finding import SecurityFinding
+from app.db.models.security_scan_record import SecurityScanRecord
 from app.db.models.user import User
 from app.db.session import async_session_factory, get_db
 from app.schemas.approval import ApprovalRequest, ApprovalResponse
@@ -303,6 +305,7 @@ async def get_run_workflow_state(
             "validation_status": state_values.get("validation_status"),
             "error_message": state_values.get("error_message"),
             "plan": state_values.get("plan"),
+            "security_result": state_values.get("security_result"),
             "test_result": state_values.get("test_result"),
             "review": state_values.get("review"),
             "repository_context": meta.get("repository_context"),
@@ -503,6 +506,13 @@ async def approve_run(
             detail=f"Approval rejected: patch '{payload.patch_id}' (revision {patch.revision}) has been superseded by newer revision {latest_patch.revision}.",
         )
 
+    # Cryptographic anti-tamper verification: submitted hash must match stored patch hash exactly
+    if patch.content_hash != payload.patch_hash:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Approval rejected: submitted patch_hash does not match the stored patch revision content hash.",
+        )
+
     # Evidence guard: if approving, patch must have completed validation
     allowed_validation_statuses = {"TESTS_PASSED", "VALIDATED", "PASSED"}
     if settings.allow_manual_approval_without_sandbox:
@@ -544,12 +554,59 @@ async def approve_run(
                     detail=f"Approval rejected: submitted base_commit_sha '{payload.base_commit_sha}' does not match run base commit SHA '{expected_commit}'.",
                 )
 
-    # Cryptographic anti-tamper verification: submitted hash must match stored patch hash exactly
-    if patch.content_hash != payload.patch_hash:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Approval rejected: submitted patch_hash does not match the stored patch revision content hash.",
+    # Mandatory AI Security Guardian Gate Guard: patch must have completed security scanning with zero blockers
+    if payload.decision == "approved":
+        sec_query = (
+            select(SecurityScanRecord)
+            .where(
+                SecurityScanRecord.run_id == run.id,
+                SecurityScanRecord.patch_hash == patch.content_hash,
+            )
+            .order_by(SecurityScanRecord.created_at.desc())
+            .limit(1)
         )
+        sec_result = await db.execute(sec_query)
+        sec_record = sec_result.scalar_one_or_none()
+
+        sec_status = None
+        block_reasons = []
+
+        if sec_record:
+            sec_status = sec_record.status
+            block_reasons = sec_record.block_reasons or []
+        elif state_values and state_values.get("security_result"):
+            sec_data = state_values.get("security_result")
+            if sec_data.get("patch_hash") == patch.content_hash:
+                sec_status = sec_data.get("status")
+                block_reasons = sec_data.get("block_reasons", [])
+
+        if not sec_status:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Approval rejected: patch revision {patch.revision} has not completed mandatory Security Guardian evaluation.",
+            )
+
+        if sec_status != "PASSED" or (sec_record and (sec_record.critical_count > 0 or sec_record.high_count > 0)):
+            reasons_str = "; ".join(block_reasons) if block_reasons else "Mandatory security policy violation"
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Approval rejected: Security Guardian gate is BLOCKED ({reasons_str}).",
+            )
+
+        # Check for active blocking findings in database
+        active_blocker_query = select(SecurityFinding).where(
+            SecurityFinding.run_id == run.id,
+            SecurityFinding.patch_hash == patch.content_hash,
+            SecurityFinding.is_blocking == True,
+            SecurityFinding.status == "ACTIVE",
+        )
+        active_blockers = (await db.execute(active_blocker_query)).scalars().all()
+        if active_blockers:
+            reasons = [f"[{b.severity}] {b.title}" for b in active_blockers[:3]]
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Approval rejected: Security Guardian gate is BLOCKED ({'; '.join(reasons)}).",
+            )
 
     approval = ApprovalRecord(
         run_id=run.id,
@@ -621,3 +678,98 @@ async def list_run_approvals(
     query = select(ApprovalRecord).where(ApprovalRecord.run_id == run.id).order_by(ApprovalRecord.created_at.desc())
     result = await db.execute(query)
     return list(result.scalars().all())
+
+
+@router.get("/{run_id}/security")
+async def get_run_security_report(
+    run: Run = Depends(get_authorized_run),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Retrieve detailed AI Security Guardian findings, scan records, and gate status for a run."""
+    # Fetch latest scan record
+    scan_query = (
+        select(SecurityScanRecord)
+        .where(SecurityScanRecord.run_id == run.id)
+        .order_by(SecurityScanRecord.created_at.desc())
+        .limit(1)
+    )
+    scan_res = await db.execute(scan_query)
+    latest_scan = scan_res.scalar_one_or_none()
+
+    # Fetch all findings for run
+    findings_query = (
+        select(SecurityFinding)
+        .where(SecurityFinding.run_id == run.id)
+        .order_by(SecurityFinding.created_at.desc())
+    )
+    findings_res = await db.execute(findings_query)
+    findings = findings_res.scalars().all()
+
+    # Also check LangGraph state for in-flight scan data
+    from app.orchestration import get_orchestrator
+    orchestrator = get_orchestrator()
+    state_values = await orchestrator.get_run_state(run.id) or {}
+    sec_state = state_values.get("security_result")
+
+    findings_list = [
+        {
+            "id": f.id,
+            "category": f.category,
+            "rule_id": f.rule_id,
+            "title": f.title,
+            "description": f.description,
+            "severity": f.severity,
+            "confidence": f.confidence,
+            "file_path": f.file_path,
+            "line_start": f.line_start,
+            "line_end": f.line_end,
+            "evidence_redacted": f.evidence_redacted,
+            "remediation": f.remediation,
+            "scanner_name": f.scanner_name,
+            "scanner_version": f.scanner_version,
+            "is_blocking": f.is_blocking,
+            "status": f.status,
+            "patch_revision": f.patch_revision,
+            "patch_hash": f.patch_hash,
+            "created_at": f.created_at.isoformat() if f.created_at else None,
+        }
+        for f in findings
+    ]
+
+    if latest_scan:
+        return {
+            "run_id": run.id,
+            "status": latest_scan.status,
+            "can_approve": latest_scan.status == "PASSED",
+            "patch_revision": latest_scan.patch_revision,
+            "patch_hash": latest_scan.patch_hash,
+            "base_commit_sha": latest_scan.base_commit_sha,
+            "findings_count": latest_scan.findings_count,
+            "critical_count": latest_scan.critical_count,
+            "high_count": latest_scan.high_count,
+            "medium_count": latest_scan.medium_count,
+            "low_count": latest_scan.low_count,
+            "info_count": latest_scan.info_count,
+            "block_reasons": latest_scan.block_reasons,
+            "scanners_executed": latest_scan.scanners_executed,
+            "duration_ms": latest_scan.duration_ms,
+            "scanned_at": latest_scan.created_at.isoformat(),
+            "findings": findings_list,
+        }
+    elif sec_state:
+        return sec_state
+    else:
+        return {
+            "run_id": run.id,
+            "status": "UNVERIFIED",
+            "can_approve": False,
+            "findings_count": 0,
+            "critical_count": 0,
+            "high_count": 0,
+            "medium_count": 0,
+            "low_count": 0,
+            "info_count": 0,
+            "block_reasons": ["Security evaluation has not yet been executed for this run."],
+            "scanners_executed": [],
+            "findings": [],
+        }

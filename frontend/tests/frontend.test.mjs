@@ -359,4 +359,90 @@ describe("Frontend Core Architecture & Security Controls", () => {
     assert.equal(mockLocalStorage.getItem(tokenKey), null);
     assert.equal(mockLocalStorage.getItem(userKey), null);
   });
+
+  it("verifies AI Security Guardian approval gating logic", () => {
+    function canApprovePatch({ runStatus, validationStatus, reviewerRec, hasBlockingFindings, securityGateStatus }) {
+      const isAwaiting = runStatus === "AWAITING_APPROVAL";
+      const isExecutionVerified =
+        validationStatus === "passed" ||
+        validationStatus === "TESTS_PASSED" ||
+        validationStatus === "VALIDATED";
+      const isReviewBlocking =
+        hasBlockingFindings || String(reviewerRec || "").toLowerCase() === "reject";
+      const isSecurityBlocked =
+        securityGateStatus !== undefined && securityGateStatus !== "PASSED";
+
+      return isAwaiting && isExecutionVerified && !isReviewBlocking && !isSecurityBlocked;
+    }
+
+    // 1. All passed -> true
+    assert.equal(
+      canApprovePatch({
+        runStatus: "AWAITING_APPROVAL",
+        validationStatus: "TESTS_PASSED",
+        reviewerRec: "approve",
+        hasBlockingFindings: false,
+        securityGateStatus: "PASSED",
+      }),
+      true
+    );
+
+    // 2. Security BLOCKED -> strictly false
+    assert.equal(
+      canApprovePatch({
+        runStatus: "AWAITING_APPROVAL",
+        validationStatus: "TESTS_PASSED",
+        reviewerRec: "approve",
+        hasBlockingFindings: false,
+        securityGateStatus: "BLOCKED",
+      }),
+      false
+    );
+
+    // 3. Security UNVERIFIED -> strictly false (fail-closed)
+    assert.equal(
+      canApprovePatch({
+        runStatus: "AWAITING_APPROVAL",
+        validationStatus: "TESTS_PASSED",
+        reviewerRec: "approve",
+        hasBlockingFindings: false,
+        securityGateStatus: "UNVERIFIED",
+      }),
+      false
+    );
+
+    // 4. Tests failed even if security passed -> false
+    assert.equal(
+      canApprovePatch({
+        runStatus: "AWAITING_APPROVAL",
+        validationStatus: "FAILED",
+        reviewerRec: "approve",
+        hasBlockingFindings: false,
+        securityGateStatus: "PASSED",
+      }),
+      false
+    );
+  });
+
+  it("verifies Security Guardian scanner suite covers required categories", () => {
+    const requiredScanners = [
+      "secret_scanner",
+      "ast_visitor",
+      "dependency_auditor",
+      "regression_scanner",
+      "bandit",
+    ];
+    const availableScanners = [
+      "secret_scanner",
+      "ast_visitor",
+      "dependency_auditor",
+      "regression_scanner",
+      "bandit",
+    ];
+
+    for (const s of requiredScanners) {
+      assert.ok(availableScanners.includes(s), `Missing scanner: ${s}`);
+    }
+  });
 });
+

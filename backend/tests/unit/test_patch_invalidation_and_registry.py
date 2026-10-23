@@ -196,6 +196,11 @@ async def test_stale_validation_or_review_rejected_at_finalization():
             "findings": [],
             "patch_hash": hash_b,
         },
+        "security_result": {
+            "status": "PASSED",
+            "patch_hash": hash_b,
+            "findings": [],
+        },
         "metadata": {"base_commit_sha": BASE_SHA_A},
     }
 
@@ -211,6 +216,72 @@ async def test_stale_validation_or_review_rejected_at_finalization():
     res = await finalization_node(state)
     assert res["status"] == WorkflowStatus.FAILED.value
     assert "Stale validation evidence" in res["error_message"]
+
+
+@pytest.mark.asyncio
+async def test_stale_or_missing_security_rejected_at_finalization():
+    """Finalization node rejects runs where security verification is missing or stale."""
+    hash_a = compute_canonical_patch_hash(DIFF_A)
+    hash_b = compute_canonical_patch_hash(DIFF_B)
+
+    # 1. Missing security result
+    state_missing: DevSquadState = {
+        "run_id": "run-sec-missing",
+        "status": WorkflowStatus.RUNNING.value,
+        "plan": {"objective": "Fix", "steps": []},
+        "current_patch": {
+            "unified_diff": DIFF_B,
+            "content_hash": hash_b,
+            "base_commit_sha": BASE_SHA_A,
+            "revision": 2,
+        },
+        "metadata": {"base_commit_sha": BASE_SHA_A},
+    }
+
+    mock_session = MagicMock()
+    mock_session.get = AsyncMock(return_value=None)
+    mock_session.commit = AsyncMock()
+    mock_ctx = MagicMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_ctx.__aexit__ = AsyncMock()
+    deps = NodeDependencies(session_factory=lambda: mock_ctx)
+    set_default_deps(deps)
+
+    res = await finalization_node(state_missing)
+    assert res["status"] == WorkflowStatus.FAILED.value
+    assert "Mandatory Security Guardian verification evidence is missing" in res["error_message"]
+
+    # 2. Stale security result (hash_a instead of hash_b)
+    state_stale: DevSquadState = {
+        "run_id": "run-sec-stale",
+        "status": WorkflowStatus.RUNNING.value,
+        "plan": {"objective": "Fix", "steps": []},
+        "current_patch": {
+            "unified_diff": DIFF_B,
+            "content_hash": hash_b,
+            "base_commit_sha": BASE_SHA_A,
+            "revision": 2,
+        },
+        "test_result": {
+            "status": "TESTS_PASSED",
+            "patch_hash": hash_b,
+            "base_commit_sha": BASE_SHA_A,
+            "patch_revision": 2,
+        },
+        "review_result": {
+            "recommendation": "approve",
+            "findings": [],
+            "patch_hash": hash_b,
+        },
+        "security_result": {
+            "status": "PASSED",
+            "patch_hash": hash_a,  # Stale!
+        },
+        "metadata": {"base_commit_sha": BASE_SHA_A},
+    }
+    res_stale = await finalization_node(state_stale)
+    assert res_stale["status"] == WorkflowStatus.FAILED.value
+    assert "Stale security evidence" in res_stale["error_message"]
 
 
 # --- 3. Human approval exists for patch A, then patch B is generated ---

@@ -13,6 +13,7 @@ import {
   Repository,
   Run,
   RunStatus,
+  SecurityScanResult,
   User,
   WorkflowStateSnapshot,
 } from "@/types";
@@ -203,6 +204,10 @@ export const api = {
 
   async getRunApprovals(id: string): Promise<ApprovalRecord[]> {
     return fetchWithAuth<ApprovalRecord[]>(`/api/v1/runs/${id}/approvals`);
+  },
+
+  async getRunSecurity(id: string): Promise<SecurityScanResult> {
+    return fetchWithAuth<SecurityScanResult>(`/api/v1/runs/${id}/security`);
   },
 
   async startRun(

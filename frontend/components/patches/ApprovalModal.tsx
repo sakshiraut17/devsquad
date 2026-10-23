@@ -14,6 +14,8 @@ interface ApprovalModalProps {
   baseCommitSha?: string;
   reviewerRecommendation?: string;
   hasBlockingReviewFindings?: boolean;
+  securityGateStatus?: "PASSED" | "BLOCKED" | "UNVERIFIED";
+  securityBlockReasons?: string[];
 }
 
 export function ApprovalModal({
@@ -25,6 +27,8 @@ export function ApprovalModal({
   baseCommitSha,
   reviewerRecommendation,
   hasBlockingReviewFindings = false,
+  securityGateStatus,
+  securityBlockReasons = [],
 }: ApprovalModalProps) {
   const [decision, setDecision] = useState<"approved" | "rejected">("approved");
   const [feedback, setFeedback] = useState("");
@@ -50,7 +54,11 @@ export function ApprovalModal({
     hasBlockingReviewFindings ||
     String(reviewerRecommendation || "").toLowerCase() === "reject";
 
-  const canApprove = isAwaiting && isExecutionVerified && !isReviewBlocking;
+  const isSecurityBlocked =
+    securityGateStatus !== undefined && securityGateStatus !== "PASSED";
+
+  const canApprove =
+    isAwaiting && isExecutionVerified && !isReviewBlocking && !isSecurityBlocked;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,7 +128,13 @@ export function ApprovalModal({
             <div>
               <p className="font-bold">Approval Policy Disallowed:</p>
               <p className="text-[11px] text-text-secondary mt-0.5">
-                {run.status !== "AWAITING_APPROVAL"
+                {isSecurityBlocked
+                  ? `Security Guardian gate is ${securityGateStatus || "BLOCKED"}: ${
+                      securityBlockReasons.length > 0
+                        ? securityBlockReasons.join("; ")
+                        : "Mandatory security evaluation failed or contains active blockers."
+                    }`
+                  : run.status !== "AWAITING_APPROVAL"
                   ? `Run status is '${run.status}', not 'AWAITING_APPROVAL'.`
                   : isReviewBlocking
                   ? `Reviewer recommended rejection or identified blocking findings.`
@@ -158,6 +172,14 @@ export function ApprovalModal({
               {patch.validation_status}
             </span>
           </div>
+          {securityGateStatus && (
+            <div className="flex justify-between pt-1.5 border-t border-border-subtle">
+              <span className="text-text-muted">Security Guardian Gate:</span>
+              <span className={securityGateStatus === "PASSED" ? "text-semantic-success font-bold uppercase" : "text-semantic-danger font-bold uppercase"}>
+                {securityGateStatus}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Form Controls */}

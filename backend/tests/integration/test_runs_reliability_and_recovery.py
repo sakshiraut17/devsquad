@@ -25,6 +25,7 @@ from app.db.models.issue import Issue
 from app.db.models.patch import Patch
 from app.db.models.repository import Repository
 from app.db.models.run import Run, RunStatus
+from app.db.models.security_scan_record import SecurityScanRecord
 from app.db.models.user import User
 from app.orchestration import (
     DevSquadOrchestrator,
@@ -348,6 +349,22 @@ async def test_approval_gate_rejects_duplicate_or_concurrent_approval(
         summary="Fix discount calculation",
     )
     test_db_session.add(patch)
+
+    sec_record = SecurityScanRecord(
+        run_id=run.id,
+        patch_id=patch.id,
+        patch_hash=content_hash,
+        status="PASSED",
+        critical_count=0,
+        high_count=0,
+        medium_count=0,
+        low_count=0,
+        info_count=0,
+        scanners_executed=["secret_scanner"],
+        block_reasons=[],
+    )
+    test_db_session.add(sec_record)
+
     run.status = RunStatus.AWAITING_APPROVAL.value
     await test_db_session.commit()
 

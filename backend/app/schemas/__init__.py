@@ -63,4 +63,19 @@ __all__ = [
     "EvidenceReference",
     "PlanVerificationIssue",
     "PlanVerificationResult",
+    "SecurityFindingSchema",
+    "SecurityScanResult",
+    "SecuritySummary",
+    "SecurityGateStatus",
+    "SecurityDiagnostics",
+    "ScannerStatusItem",
 ]
+
+from app.schemas.security import (
+    SecurityFindingSchema,
+    SecurityScanResult,
+    SecuritySummary,
+    SecurityGateStatus,
+    SecurityDiagnostics,
+    ScannerStatusItem,
+)

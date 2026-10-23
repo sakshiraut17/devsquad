@@ -7,6 +7,7 @@ export type RunStatus =
   | "INGESTING"
   | "PLANNING"
   | "CODING"
+  | "SECURITY_SCANNING"
   | "TESTING"
   | "REVIEWING"
   | "AWAITING_APPROVAL"
@@ -173,6 +174,7 @@ export interface WorkflowStateSnapshot {
     validation_status?: string;
     error_message?: string | null;
     plan?: StructuredPlan | null;
+    security_result?: SecurityScanResult | null;
     test_result?: TestResult | null;
     review?: ReviewResponse | null;
     repository_context?: RepositoryContextSummary | null;
@@ -254,4 +256,64 @@ export interface OverviewStats {
   awaiting_approval_count: number;
   failed_runs_count: number;
   completed_runs_count: number;
+}
+
+export type SecuritySeverity = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "INFO";
+export type SecurityGateStatus = "PASSED" | "BLOCKED" | "UNVERIFIED";
+
+export interface SecurityFinding {
+  id?: string | null;
+  run_id: string;
+  patch_id?: string | null;
+  patch_revision: number;
+  patch_hash: string;
+  base_commit_sha?: string | null;
+  category: string;
+  rule_id: string;
+  title: string;
+  description: string;
+  severity: SecuritySeverity;
+  confidence: string;
+  file_path?: string | null;
+  line_start?: number | null;
+  line_end?: number | null;
+  evidence_redacted?: string | null;
+  remediation?: string | null;
+  scanner_name: string;
+  scanner_version?: string | null;
+  advisory_id?: string | null;
+  is_blocking: boolean;
+  status: string;
+  created_at?: string | null;
+}
+
+export interface SecuritySummary {
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  info: number;
+  total: number;
+}
+
+export interface SecurityScanResult {
+  run_id: string;
+  patch_id?: string | null;
+  patch_revision?: number;
+  patch_hash?: string;
+  base_commit_sha?: string | null;
+  status: SecurityGateStatus;
+  can_approve: boolean;
+  findings_count?: number;
+  critical_count?: number;
+  high_count?: number;
+  medium_count?: number;
+  low_count?: number;
+  info_count?: number;
+  block_reasons: string[];
+  findings: SecurityFinding[];
+  summary?: SecuritySummary;
+  scanners_executed: string[];
+  duration_ms?: number;
+  scanned_at?: string;
 }
