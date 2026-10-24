@@ -248,3 +248,49 @@ async def test_get_commit_success():
         assert commit.message == "feat: initial commit"
         assert commit.author == "Octocat"
 
+
+@pytest.mark.asyncio
+async def test_get_token_permissions_authorized():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/user"
+        return httpx.Response(
+            200,
+            headers={
+                "x-oauth-scopes": "repo, read:user, write:discussion",
+                "x-ratelimit-limit": "5000",
+                "x-ratelimit-remaining": "4990",
+            },
+            json={"login": "ayushkale06", "id": 12345},
+        )
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        svc = GitHubService(token="ghp_test123", base_url="https://api.github.com", http_client=client)
+        perms = await svc.get_token_permissions()
+        assert perms["authenticated"] is True
+        assert perms["username"] == "ayushkale06"
+        assert perms["can_write_issues"] is True
+        assert perms["can_create_prs"] is True
+        assert "repo" in perms["scopes"]
+        assert perms["rate_limit_remaining"] == 4990
+
+
+@pytest.mark.asyncio
+async def test_post_issue_comment_and_close():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST" and request.url.path == "/repos/octocat/Hello-World/issues/1/comments":
+            return httpx.Response(201, json={"id": 999, "html_url": "https://github.com/octocat/Hello-World/issues/1#issuecomment-999"})
+        if request.method == "PATCH" and request.url.path == "/repos/octocat/Hello-World/issues/1":
+            return httpx.Response(200, json={"id": 1, "state": "closed"})
+        return httpx.Response(404)
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        svc = GitHubService(token="ghp_test123", base_url="https://api.github.com", http_client=client)
+        comment = await svc.post_issue_comment("octocat", "Hello-World", 1, "Solution details")
+        assert comment["id"] == 999
+        assert "issuecomment-999" in comment["html_url"]
+
+        closed = await svc.close_issue("octocat", "Hello-World", 1)
+        assert closed["state"] == "closed"
+

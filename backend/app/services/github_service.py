@@ -44,6 +44,10 @@ class GitHubRepoMetadata(BaseModel):
     description: Optional[str] = None
     is_private: bool = False
     html_url: str
+    stargazers_count: int = 0
+    forks_count: int = 0
+    language: Optional[str] = None
+    open_issues_count: int = 0
 
 
 class GitHubIssue(BaseModel):
@@ -209,6 +213,10 @@ class GitHubService:
                 description=data.get("description"),
                 is_private=data.get("private", False),
                 html_url=data["html_url"],
+                stargazers_count=data.get("stargazers_count", 0),
+                forks_count=data.get("forks_count", 0),
+                language=data.get("language"),
+                open_issues_count=data.get("open_issues_count", 0),
             )
         except httpx.TimeoutException as exc:
             raise GitHubAPIError(f"Timeout connecting to GitHub for repo {owner}/{repo}") from exc
@@ -427,3 +435,232 @@ class GitHubService:
             )
         except httpx.TimeoutException as exc:
             raise GitHubAPIError(f"Timeout fetching commit '{commit_sha}' for {owner}/{repo}") from exc
+
+    async def get_user_profile(self, username: Optional[str] = None) -> dict[str, Any]:
+        """Fetch GitHub user profile (authenticated or by username)."""
+        url = f"{self.base_url}/users/{username}" if username else f"{self.base_url}/user"
+        try:
+            resp = await self.client.get(url)
+            self._handle_response_error(resp, f"user_profile ({username or 'authenticated'})")
+            data = resp.json()
+            return {
+                "login": data.get("login"),
+                "id": data.get("id"),
+                "avatar_url": data.get("avatar_url"),
+                "html_url": data.get("html_url"),
+                "name": data.get("name"),
+                "bio": data.get("bio"),
+                "public_repos": data.get("public_repos", 0),
+                "total_private_repos": data.get("total_private_repos", 0),
+                "followers": data.get("followers", 0),
+                "following": data.get("following", 0),
+            }
+        except httpx.TimeoutException as exc:
+            raise GitHubAPIError(f"Timeout fetching GitHub profile for {username or 'current user'}") from exc
+
+    async def list_user_repositories(
+        self,
+        username: Optional[str] = None,
+        page: int = 1,
+        per_page: int = 30,
+    ) -> list[GitHubRepoMetadata]:
+        """Fetch repositories for authenticated user or specific username."""
+        if username:
+            url = f"{self.base_url}/users/{username}/repos"
+            params = {"sort": "updated", "page": page, "per_page": per_page}
+        else:
+            url = f"{self.base_url}/user/repos"
+            params = {"sort": "updated", "affiliation": "owner,collaborator", "page": page, "per_page": per_page}
+
+        try:
+            resp = await self.client.get(url, params=params)
+            self._handle_response_error(resp, f"repos for {username or 'authenticated user'}")
+            items = resp.json()
+            return [
+                GitHubRepoMetadata(
+                    id=data["id"],
+                    name=data["name"],
+                    full_name=data["full_name"],
+                    owner=data["owner"]["login"],
+                    default_branch=data.get("default_branch", "main"),
+                    description=data.get("description"),
+                    is_private=data.get("private", False),
+                    html_url=data["html_url"],
+                    stargazers_count=data.get("stargazers_count", 0),
+                    forks_count=data.get("forks_count", 0),
+                    language=data.get("language"),
+                    open_issues_count=data.get("open_issues_count", 0),
+                )
+                for data in items
+            ]
+        except httpx.TimeoutException as exc:
+            raise GitHubAPIError(f"Timeout listing user repositories for {username or 'current user'}") from exc
+
+    async def list_user_issues(
+        self,
+        username: Optional[str] = None,
+        state: str = "open",
+        page: int = 1,
+        per_page: int = 30,
+    ) -> list[dict[str, Any]]:
+        """
+        List open issues across the user's account.
+        If authenticated, queries /user/issues.
+        If username is provided without a token, queries recent public repos and aggregates open issues.
+        """
+        if not username:
+            # Authenticated user issues
+            url = f"{self.base_url}/user/issues"
+            params = {"state": state, "filter": "all", "page": page, "per_page": per_page}
+            try:
+                resp = await self.client.get(url, params=params)
+                self._handle_response_error(resp, "user_issues")
+                items = resp.json()
+                results = []
+                for data in items:
+                    if "pull_request" in data:
+                        continue
+                    repo_full_name = data.get("repository", {}).get("full_name") or ""
+                    labels = [lbl["name"] if isinstance(lbl, dict) else str(lbl) for lbl in data.get("labels", [])]
+                    results.append({
+                        "number": data["number"],
+                        "title": data["title"],
+                        "body": data.get("body") or "",
+                        "state": data.get("state", "open"),
+                        "labels": labels,
+                        "html_url": data["html_url"],
+                        "author": data.get("user", {}).get("login"),
+                        "repository_name": repo_full_name,
+                        "comments_count": data.get("comments", 0),
+                        "created_at": data.get("created_at"),
+                        "updated_at": data.get("updated_at"),
+                    })
+                return results
+            except Exception as exc:
+                logger.warning(f"Failed to fetch /user/issues: {exc}")
+
+        # If username is provided or token is not scoped for /user/issues:
+        user_to_query = username
+        if not user_to_query:
+            try:
+                prof = await self.get_user_profile()
+                user_to_query = prof.get("login")
+            except Exception:
+                user_to_query = None
+
+        if not user_to_query:
+            return []
+
+        # List user's active repositories and aggregate issues
+        repos = await self.list_user_repositories(username=user_to_query, per_page=10)
+        aggregated = []
+        for repo in repos:
+            if repo.open_issues_count > 0:
+                try:
+                    owner, name = repo.full_name.split("/", 1)
+                    issues = await self.list_issues(owner, name, state=state, per_page=10)
+                    for issue in issues:
+                        aggregated.append({
+                            "number": issue.number,
+                            "title": issue.title,
+                            "body": issue.body,
+                            "state": issue.state,
+                            "labels": issue.labels,
+                            "html_url": issue.html_url,
+                            "author": issue.author,
+                            "repository_name": repo.full_name,
+                            "comments_count": issue.comments_count,
+                        })
+                except Exception as exc:
+                    logger.debug(f"Could not list issues for {repo.full_name}: {exc}")
+        return aggregated
+
+    async def get_token_permissions(self) -> dict[str, Any]:
+        """Inspect token scopes and capabilities from GitHub API headers."""
+        url = f"{self.base_url}/user"
+        try:
+            resp = await self.client.get(url)
+            self._handle_response_error(resp, "token permissions inspection")
+            scopes_header = resp.headers.get("x-oauth-scopes", "")
+            scopes = [s.strip() for s in scopes_header.split(",") if s.strip()]
+            user_data = resp.json()
+
+            can_write_issues = any(
+                s in scopes for s in ("repo", "public_repo", "write:discussion", "issues")
+            )
+            can_create_prs = any(s in scopes for s in ("repo", "public_repo"))
+            can_admin_repo = "repo" in scopes or "admin:repo_hook" in scopes
+
+            return {
+                "authenticated": True,
+                "username": user_data.get("login"),
+                "scopes": scopes,
+                "can_write_issues": can_write_issues or bool(scopes),
+                "can_create_prs": can_create_prs,
+                "can_admin_repo": can_admin_repo,
+                "rate_limit_limit": int(resp.headers.get("x-ratelimit-limit", 5000)),
+                "rate_limit_remaining": int(resp.headers.get("x-ratelimit-remaining", 5000)),
+            }
+        except Exception as exc:
+            logger.warning(f"Failed to inspect token permissions: {exc}")
+            return {
+                "authenticated": False,
+                "username": None,
+                "scopes": [],
+                "can_write_issues": False,
+                "can_create_prs": False,
+                "can_admin_repo": False,
+                "rate_limit_limit": 60,
+                "rate_limit_remaining": 0,
+            }
+
+    async def post_issue_comment(
+        self, owner: str, repo: str, issue_number: int, body: str
+    ) -> dict[str, Any]:
+        """Publish a solution comment to a GitHub issue using authenticated token."""
+        url = f"{self.base_url}/repos/{owner}/{repo}/issues/{issue_number}/comments"
+        resp = await self.client.post(url, json={"body": body})
+        self._handle_response_error(resp, f"comment on issue {owner}/{repo}#{issue_number}")
+        return resp.json()
+
+    async def create_issue(
+        self,
+        owner: str,
+        repo: str,
+        title: str,
+        body: str,
+        labels: Optional[list[str]] = None,
+    ) -> dict[str, Any]:
+        """Create a new issue on GitHub using authenticated token."""
+        url = f"{self.base_url}/repos/{owner}/{repo}/issues"
+        payload: dict[str, Any] = {"title": title, "body": body}
+        if labels:
+            payload["labels"] = labels
+        resp = await self.client.post(url, json=payload)
+        self._handle_response_error(resp, f"create issue on {owner}/{repo}")
+        return resp.json()
+
+    async def close_issue(
+        self, owner: str, repo: str, issue_number: int, state_reason: str = "completed"
+    ) -> dict[str, Any]:
+        """Close an issue on GitHub when defect is resolved."""
+        url = f"{self.base_url}/repos/{owner}/{repo}/issues/{issue_number}"
+        resp = await self.client.patch(
+            url,
+            json={"state": "closed", "state_reason": state_reason},
+        )
+        self._handle_response_error(resp, f"close issue {owner}/{repo}#{issue_number}")
+        return resp.json()
+
+    async def add_issue_labels(
+        self, owner: str, repo: str, issue_number: int, labels: list[str]
+    ) -> list[str]:
+        """Apply labels (e.g. 'devsquad-solved') to an issue."""
+        url = f"{self.base_url}/repos/{owner}/{repo}/issues/{issue_number}/labels"
+        resp = await self.client.post(url, json={"labels": labels})
+        self._handle_response_error(resp, f"add labels to {owner}/{repo}#{issue_number}")
+        data = resp.json()
+        if isinstance(data, list):
+            return [lbl["name"] if isinstance(lbl, dict) else str(lbl) for lbl in data]
+        return labels
+

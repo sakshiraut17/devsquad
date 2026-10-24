@@ -15,7 +15,10 @@ async def test_migration_upgrade_from_empty_database():
 
     try:
         db_url = f"sqlite+aiosqlite:///{temp_db_path}"
-        cfg = Config("alembic.ini")
+        alembic_ini_path = "backend/alembic.ini" if os.path.exists("backend/alembic.ini") else "alembic.ini"
+        cfg = Config(alembic_ini_path)
+        if os.path.exists("backend/alembic"):
+            cfg.set_main_option("script_location", "backend/alembic")
         cfg.set_main_option("sqlalchemy.url", db_url)
 
         # Run Alembic migration to head

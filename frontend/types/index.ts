@@ -317,3 +317,110 @@ export interface SecurityScanResult {
   duration_ms?: number;
   scanned_at?: string;
 }
+
+export interface GitHubTokenPermissions {
+  authenticated: boolean;
+  username?: string | null;
+  scopes: string[];
+  can_write_issues: boolean;
+  can_create_prs: boolean;
+  can_admin_repo: boolean;
+  rate_limit_limit: number;
+  rate_limit_remaining: number;
+  message?: string;
+}
+
+export interface PublishSolutionResult {
+  success: boolean;
+  comment_url: string;
+  issue_url: string;
+  issue_number?: number | null;
+  issue_created?: boolean;
+  issue_closed: boolean;
+  labels: string[];
+  message: string;
+}
+
+export interface GitHubUserProfile {
+  login: string;
+  id: number;
+  avatar_url: string;
+  html_url: string;
+  name?: string | null;
+  bio?: string | null;
+  public_repos: number;
+  total_private_repos?: number;
+  followers: number;
+  following: number;
+}
+
+export interface GitHubAccountIssue {
+  number: number;
+  title: string;
+  body: string;
+  state: string;
+  labels: string[];
+  html_url: string;
+  author?: string | null;
+  repository_name: string;
+  comments_count: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface QuickSolverResult {
+  repository_name: string;
+  issue_number?: number | null;
+  issue_title: string;
+  issue_url?: string | null;
+  problem_diagnosis: string;
+  root_cause: string;
+  severity: "critical" | "high" | "medium" | "low" | "clean";
+  affected_files: string[];
+  proposed_solution: string;
+  code_patch: string;
+  verification_steps: string[];
+  execution_time_seconds: number;
+  is_ai_generated: boolean;
+  ai_provider_used?: string | null;
+}
+
+export interface GitHubInspectResult {
+  owner: string;
+  repo: string;
+  parsed_issue_number?: number | null;
+  repository: {
+    id: number;
+    name: string;
+    full_name: string;
+    owner: string;
+    default_branch: string;
+    description?: string | null;
+    is_private: boolean;
+    html_url: string;
+    stargazers_count: number;
+    forks_count: number;
+    language?: string | null;
+    open_issues_count: number;
+  };
+  open_issues: Array<{
+    number: number;
+    title: string;
+    body?: string | null;
+    state: string;
+    labels: string[];
+    html_url: string;
+    author?: string | null;
+    comments_count: number;
+  }>;
+  selected_issue?: {
+    number: number;
+    title: string;
+    body?: string | null;
+    state: string;
+    labels: string[];
+    html_url: string;
+  } | null;
+  file_tree_sample: string[];
+}
+

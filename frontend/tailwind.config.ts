@@ -10,15 +10,24 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: "#0B0D0F",
+        background: "#07090E",
         surface: {
-          DEFAULT: "#14181C",
-          elevated: "#1D242A",
-          hover: "#222B32",
+          DEFAULT: "#0E131F",
+          elevated: "#141C2B",
+          hover: "#1A2538",
+          glass: "rgba(14, 19, 31, 0.75)",
         },
         border: {
-          subtle: "#242C34",
-          strong: "#333D48",
+          subtle: "#1B2436",
+          strong: "#2B3A55",
+          glow: "rgba(0, 242, 254, 0.25)",
+        },
+        cyber: {
+          cyan: "#00F2FE",
+          mint: "#00F5A0",
+          purple: "#8B5CF6",
+          pink: "#F43F5E",
+          emerald: "#10B981",
         },
         forge: {
           lime: "#D7FF64",
@@ -45,9 +54,9 @@ const config: Config = {
           danger: "#F85149",
         },
         text: {
-          primary: "#F1F4ED",
-          secondary: "#87919A",
-          muted: "#5B656F",
+          primary: "#F1F5F9",
+          secondary: "#94A3B8",
+          muted: "#64748B",
         },
       },
       fontFamily: {

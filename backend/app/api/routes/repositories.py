@@ -86,6 +86,23 @@ async def get_repository(
     return repo
 
 
+@router.delete("/{repository_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_repository(
+    repository_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Delete a registered repository and cascade delete its associated issues, runs, and artifacts."""
+    repo = await db.get(Repository, repository_id)
+    if not repo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Repository '{repository_id}' not found.",
+        )
+    await db.delete(repo)
+    await db.commit()
+    return None
+
+
 @router.get("/{repository_id}/github-issues", response_model=list[dict])
 async def list_repository_github_issues(
     repository_id: str,

@@ -2,6 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "motion/react";
 import {
   GitBranch,
   AlertCircle,
@@ -17,17 +19,21 @@ import {
   Database,
   Container,
   User as UserIcon,
+  Zap,
+  Sparkles,
 } from "lucide-react";
 import { Navbar } from "@/components/layout/Navbar";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { StatusBadge } from "@/components/layout/StatusBadge";
 import { AgentFlowVisualization } from "@/components/agents/AgentFlowVisualization";
+import { QuickSolverSection } from "@/components/solver/QuickSolverSection";
 import { api } from "@/lib/api/client";
 import { getSessionUser } from "@/lib/auth/session";
 import { AgentEvent, HealthResponse, OverviewStats, Run, User } from "@/types";
 import { formatDate } from "@/lib/utils";
 
 export default function CommandCenterPage() {
+  const router = useRouter();
   const [stats, setStats] = useState<OverviewStats | null>(null);
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [runs, setRuns] = useState<Run[]>([]);
@@ -35,6 +41,7 @@ export default function CommandCenterPage() {
   const [runEvents, setRunEvents] = useState<AgentEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedTarget, setSelectedTarget] = useState<string>("");
 
   const [sessionUser, setSessionUser] = useState<User | null>(null);
   const [authRequired, setAuthRequired] = useState(false);
@@ -111,38 +118,154 @@ export default function CommandCenterPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return (
-    <div className="flex-1 flex flex-col min-w-0 bg-background">
-      <Navbar onRefresh={loadData} title="Command Center" subtitle="Autonomous Engineering Control Room" />
+  async function handleLaunchFullWorkflow(repoFullName: string, issueNumber?: number) {
+    try {
+      const importRes = await api.importRepository(repoFullName, true);
+      const repo = importRes.repository;
 
-      <main className="p-6 space-y-6 max-w-7xl w-full mx-auto">
-        {/* Engineering in Motion Hero Banner */}
-        <div className="p-6 rounded-lg bg-surface border border-border-subtle relative overflow-hidden">
-          <div className="absolute -right-16 -top-16 w-64 h-64 bg-forge-lime/5 rounded-full blur-3xl pointer-events-none" />
-          <div className="max-w-2xl relative z-10 space-y-1.5">
-            <div className="flex items-center gap-2 text-xs font-mono text-forge-lime">
-              <span className="w-2 h-2 rounded-full bg-forge-lime animate-pulse" />
-              <span>ORCHESTRATION PIPELINE ENGAGED</span>
+      let issueId: string | null = null;
+      const issues = await api.getIssues(repo.id);
+
+      if (issueNumber) {
+        const match = issues.find((i) => i.github_issue_number === issueNumber);
+        if (match) issueId = match.id;
+      }
+
+      if (!issueId && issueNumber) {
+        try {
+          const synced = await api.syncRepositoryGitHubIssue(repo.id, issueNumber);
+          issueId = synced.id;
+        } catch {
+          // Fallback to local defect creation without getting blocked by GitHub rate limits
+          const created = await api.createIssue({
+            repository_id: repo.id,
+            github_issue_number: issueNumber,
+            title: `Issue #${issueNumber} for ${repoFullName}`,
+            body: `Ingested issue report for ${repoFullName}`,
+            state: "open",
+            labels: ["bug", "autonomous-import"],
+          });
+          issueId = created.id;
+        }
+      }
+
+      if (!issueId && issues.length > 0) {
+        issueId = issues[0].id;
+      }
+
+      if (!issueId) {
+        const created = await api.createIssue({
+          repository_id: repo.id,
+          github_issue_number: 1,
+          title: `Resolve runtime defect in ${repoFullName}`,
+          body: `Autonomous agent resolution workspace for ${repoFullName}`,
+          state: "open",
+          labels: ["bug", "autonomous-import"],
+        });
+        issueId = created.id;
+      }
+
+      if (issueId) {
+        const newRun = await api.createRun(repo.id, issueId);
+        await api.startRun(newRun.id, { background: true });
+        router.push(`/runs/${newRun.id}`);
+      } else {
+        router.push(`/runs`);
+      }
+    } catch (err: any) {
+      console.warn("Could not dispatch run automatically:", err);
+      router.push(`/runs`);
+    }
+  }
+
+  function handleSelectIssueForSolve(issue: any) {
+    const url = `https://github.com/${issue.repository_name}/issues/${issue.number}`;
+    setSelectedTarget(url);
+    window.scrollTo({ top: 200, behavior: "smooth" });
+  }
+
+  return (
+    <div className="flex-1 flex flex-col min-w-0 bg-transparent">
+      <Navbar
+        onRefresh={loadData}
+        title="Command Center"
+        subtitle="Autonomous Engineering Control Room"
+        onSelectIssueForSolve={handleSelectIssueForSolve}
+      />
+
+      <main className="p-6 space-y-8 max-w-7xl w-full mx-auto relative z-10">
+        {/* Engineering in Motion Hero Banner with Motion */}
+        <motion.div
+          initial={{ opacity: 0, y: -15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+          className="p-6 lg:p-8 rounded-3xl bg-gradient-to-br from-surface/90 via-surface/80 to-surface-elevated/90 border border-cyan-500/20 backdrop-blur-2xl relative overflow-hidden shadow-2xl"
+        >
+          <div className="absolute -right-16 -top-16 w-80 h-80 bg-gradient-to-br from-cyan-400/15 via-emerald-400/10 to-transparent rounded-full blur-3xl pointer-events-none" />
+          <div className="max-w-2xl relative z-10 space-y-3">
+            <div className="flex items-center gap-2 text-xs font-mono text-cyan-400">
+              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+              <span className="font-bold tracking-wider">REALTIME MULTI-AGENT PLATFORM ACTIVE</span>
             </div>
-            <h1 className="text-2xl font-bold font-mono tracking-tight text-text-primary">
-              Engineering, in motion.
+            <h1 className="text-3xl sm:text-4xl font-black font-mono tracking-tight text-text-primary">
+              Engineering, in{" "}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-emerald-400 to-lime-300">
+                motion.
+              </span>
             </h1>
-            <p className="text-xs text-text-secondary leading-relaxed font-mono">
-              Plan, patch, test, and review software changes with an autonomous engineering team.
+            <p className="text-xs sm:text-sm text-text-secondary leading-relaxed font-sans max-w-xl">
+              Inspect any repository link to diagnose defects and formulate unified patches in seconds, or discover and resolve your GitHub account issues in real time.
             </p>
+
+            <div className="flex items-center gap-3 pt-2 text-xs font-mono">
+              <motion.a
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                href="#solver-section"
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-400 to-emerald-400 hover:from-cyan-300 hover:to-emerald-300 text-black font-bold flex items-center gap-1.5 shadow-md shadow-cyan-500/20"
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span>Try Quick Solver</span>
+              </motion.a>
+              <Link
+                href="/repositories"
+                className="px-4 py-2 rounded-xl bg-surface-elevated/80 border border-border-subtle hover:border-cyan-400/40 text-text-secondary hover:text-cyan-300 flex items-center gap-1.5 transition-colors"
+              >
+                <GitBranch className="w-3.5 h-3.5" />
+                <span>Ingest Repositories</span>
+              </Link>
+            </div>
           </div>
-        </div>
+        </motion.div>
+
+        {/* Realtime Instant Inspector & Solver Section with Motion */}
+        <motion.section
+          id="solver-section"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.1, ease: "easeOut" }}
+        >
+          <QuickSolverSection
+            key={selectedTarget}
+            initialTarget={selectedTarget}
+            onLaunchFullWorkflow={handleLaunchFullWorkflow}
+          />
+        </motion.section>
 
         {error && (
-          <div className="p-3.5 rounded bg-semantic-danger/10 border border-semantic-danger/30 text-semantic-danger text-xs font-mono flex items-center justify-between">
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="p-3.5 rounded-xl bg-semantic-danger/10 border border-semantic-danger/30 text-semantic-danger text-xs font-mono flex items-center justify-between shadow-sm"
+          >
             <span>{error}</span>
             <button
               onClick={loadData}
-              className="px-2.5 py-1 rounded bg-semantic-danger/20 hover:bg-semantic-danger/30 text-[11px] text-white"
+              className="px-2.5 py-1 rounded-lg bg-semantic-danger/20 hover:bg-semantic-danger/30 text-[11px] text-white transition-colors"
             >
               Retry
             </button>
-          </div>
+          </motion.div>
         )}
 
         {/* Asymmetric Command Center Grid */}
@@ -150,13 +273,24 @@ export default function CommandCenterPage() {
           {/* Main Left Column: Agent Flow Visualization & Recent Runs (2/3 width) */}
           <div className="lg:col-span-2 space-y-6">
             {/* Interactive Agent Flow Visualization */}
-            <AgentFlowVisualization
-              run={activeRun}
-              events={runEvents}
-            />
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.2 }}
+            >
+              <AgentFlowVisualization
+                run={activeRun}
+                events={runEvents}
+              />
+            </motion.div>
 
             {/* Recent Multi-Agent Runs Table */}
-            <div className="p-5 rounded-lg bg-surface border border-border-subtle space-y-4">
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.25 }}
+              className="p-5 rounded-xl bg-surface border border-border-subtle space-y-4 shadow-sm"
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-xs font-mono font-bold text-text-primary uppercase tracking-wider">
@@ -168,7 +302,7 @@ export default function CommandCenterPage() {
                 </div>
                 <Link
                   href="/runs"
-                  className="text-xs font-mono text-forge-lime hover:underline flex items-center gap-1"
+                  className="text-xs font-mono text-emerald-400 hover:underline flex items-center gap-1 font-semibold"
                 >
                   All Runs <ArrowRight className="w-3 h-3" />
                 </Link>
@@ -176,16 +310,16 @@ export default function CommandCenterPage() {
 
               {loading ? (
                 <div className="space-y-2 py-4">
-                  <div className="h-10 bg-surface-elevated animate-pulse rounded" />
-                  <div className="h-10 bg-surface-elevated animate-pulse rounded" />
+                  <div className="h-10 bg-surface-elevated animate-pulse rounded-lg" />
+                  <div className="h-10 bg-surface-elevated animate-pulse rounded-lg" />
                 </div>
               ) : authRequired ? (
-                <div className="py-8 text-center text-xs font-mono text-text-muted bg-surface-elevated/40 rounded border border-border-subtle space-y-3">
+                <div className="py-8 text-center text-xs font-mono text-text-muted bg-surface-elevated/40 rounded-xl border border-border-subtle space-y-3">
                   <p className="text-text-secondary">Maintainer authentication required to view scoped workflow executions.</p>
                   <div>
                     <Link
                       href="/login"
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded bg-forge-lime text-black font-bold hover:bg-forge-lime/90 transition-colors text-[11px]"
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-500 text-black font-bold hover:bg-emerald-400 transition-colors text-[11px]"
                     >
                       <UserIcon className="w-3.5 h-3.5" />
                       Authenticate as Lead Maintainer
@@ -193,11 +327,11 @@ export default function CommandCenterPage() {
                   </div>
                 </div>
               ) : runs.length === 0 ? (
-                <div className="py-8 text-center text-xs font-mono text-text-muted bg-surface-elevated/40 rounded border border-border-subtle space-y-1">
+                <div className="py-8 text-center text-xs font-mono text-text-muted bg-surface-elevated/40 rounded-xl border border-border-subtle space-y-1">
                   <p className="text-text-secondary">No workflow execution records found for active session profile.</p>
                   <p className="text-[11px] text-text-muted">
                     {sessionUser
-                      ? `Active maintainer: ${sessionUser.email}. Standard benchmark repositories are owned by Lead Maintainer.`
+                      ? `Active maintainer: ${sessionUser.email}. Connect any GitHub repository or inspect an issue to dispatch a run.`
                       : "Sign in at /login to view maintainer workflow runs."}
                   </p>
                 </div>
@@ -223,7 +357,7 @@ export default function CommandCenterPage() {
                           <td className="py-3 font-semibold text-text-primary">
                             <Link
                               href={`/runs/${r.id}`}
-                              className="text-forge-lime hover:underline"
+                              className="text-emerald-400 hover:underline"
                             >
                               {r.id.slice(0, 8)}…
                             </Link>
@@ -243,7 +377,7 @@ export default function CommandCenterPage() {
                           <td className="py-3 text-right">
                             <Link
                               href={`/runs/${r.id}`}
-                              className="px-2.5 py-1 rounded bg-surface-elevated hover:bg-surface-hover text-text-primary text-[11px] border border-border-subtle transition-colors"
+                              className="px-2.5 py-1 rounded-lg bg-surface-elevated hover:bg-surface-hover text-text-primary text-[11px] border border-border-subtle transition-colors"
                             >
                               Inspect
                             </Link>
@@ -254,16 +388,21 @@ export default function CommandCenterPage() {
                   </table>
                 </div>
               )}
-            </div>
+            </motion.div>
           </div>
 
           {/* Right Column: Compact System Status & Restrained Operational Metrics (1/3 width) */}
           <div className="lg:col-span-1 space-y-6">
             {/* Restrained Operational Metrics */}
-            <div className="p-4 rounded-lg bg-surface border border-border-subtle space-y-3">
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.3 }}
+              className="p-4 rounded-xl bg-surface border border-border-subtle space-y-3 shadow-sm"
+            >
               <h3 className="text-xs font-mono font-bold text-text-primary uppercase tracking-wider flex items-center justify-between">
                 <span>Operational Metrics</span>
-                <span className="text-[10px] text-text-muted font-normal">Global Platform Aggregates</span>
+                <span className="text-[10px] text-text-muted font-normal">Global Platform</span>
               </h3>
 
               <div className="grid grid-cols-2 gap-2.5">
@@ -313,22 +452,27 @@ export default function CommandCenterPage() {
                   loading={loading}
                 />
               </div>
-            </div>
+            </motion.div>
 
             {/* Subsystem Readiness Indicators */}
-            <div className="p-4 rounded-lg bg-surface border border-border-subtle space-y-3">
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.35 }}
+              className="p-4 rounded-xl bg-surface border border-border-subtle space-y-3 shadow-sm"
+            >
               <h3 className="text-xs font-mono font-bold text-text-primary uppercase tracking-wider flex items-center justify-between">
                 <span>Subsystem Probes</span>
-                <Link href="/health" className="text-[11px] text-forge-lime hover:underline">
+                <Link href="/health" className="text-[11px] text-emerald-400 hover:underline">
                   Diagnostics
                 </Link>
               </h3>
 
               <div className="space-y-2 text-xs font-mono">
                 {/* Database */}
-                <div className="p-2.5 rounded bg-surface-elevated border border-border-subtle flex items-center justify-between">
+                <div className="p-2.5 rounded-lg bg-surface-elevated border border-border-subtle flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Database className="w-3.5 h-3.5 text-forge-lime" />
+                    <Database className="w-3.5 h-3.5 text-emerald-400" />
                     <span className="text-text-primary">Database (SQLite Async)</span>
                   </div>
                   <span className="text-semantic-success text-[11px]">
@@ -339,16 +483,16 @@ export default function CommandCenterPage() {
                 </div>
 
                 {/* Docker */}
-                <div className="p-2.5 rounded bg-surface-elevated border border-border-subtle flex items-center justify-between">
+                <div className="p-2.5 rounded-lg bg-surface-elevated border border-border-subtle flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Container className="w-3.5 h-3.5 text-cyan-ice" />
+                    <Container className="w-3.5 h-3.5 text-cyan-400" />
                     <span className="text-text-primary">Container Sandbox</span>
                   </div>
                   <span
                     className={
                       health?.components?.docker?.status === "operational"
-                        ? "text-forge-lime text-[11px] font-semibold"
-                        : "text-amber-attention text-[11px]"
+                        ? "text-emerald-400 text-[11px] font-semibold"
+                        : "text-amber-400 text-[11px]"
                     }
                   >
                     {health?.components?.docker?.status === "operational"
@@ -358,9 +502,9 @@ export default function CommandCenterPage() {
                 </div>
 
                 {/* Checkpointer */}
-                <div className="p-2.5 rounded bg-surface-elevated border border-border-subtle flex items-center justify-between">
+                <div className="p-2.5 rounded-lg bg-surface-elevated border border-border-subtle flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <ShieldCheck className="w-3.5 h-3.5 text-ultraviolet" />
+                    <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
                     <span className="text-text-primary">Checkpoint Table</span>
                   </div>
                   <span className="text-semantic-success text-[11px]">
@@ -368,15 +512,20 @@ export default function CommandCenterPage() {
                   </span>
                 </div>
               </div>
-            </div>
+            </motion.div>
 
             {/* Compact Activity Stream from Real Events */}
-            <div className="p-4 rounded-lg bg-surface border border-border-subtle space-y-3">
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.4 }}
+              className="p-4 rounded-xl bg-surface border border-border-subtle space-y-3 shadow-sm"
+            >
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-mono font-bold text-text-primary uppercase tracking-wider">
                   Live Event Stream
                 </h3>
-                <Link href="/logs" className="text-[11px] text-forge-lime font-mono hover:underline">
+                <Link href="/logs" className="text-[11px] text-emerald-400 font-mono hover:underline">
                   View stream
                 </Link>
               </div>
@@ -390,10 +539,10 @@ export default function CommandCenterPage() {
                   {runEvents.slice(0, 4).map((ev) => (
                     <div
                       key={ev.id}
-                      className="p-2.5 rounded bg-surface-elevated border border-border-subtle text-xs font-mono space-y-1"
+                      className="p-2.5 rounded-lg bg-surface-elevated border border-border-subtle text-xs font-mono space-y-1"
                     >
                       <div className="flex items-center justify-between text-[10px]">
-                        <span className="text-forge-lime font-bold uppercase">
+                        <span className="text-emerald-400 font-bold uppercase">
                           {ev.agent_name}
                         </span>
                         <span className="text-text-muted">
@@ -407,7 +556,7 @@ export default function CommandCenterPage() {
                   ))}
                 </div>
               )}
-            </div>
+            </motion.div>
           </div>
         </div>
       </main>

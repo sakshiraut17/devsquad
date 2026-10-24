@@ -3,13 +3,13 @@
 @tailwind utilities;
 
 :root {
-  --background: #0B0D0F;
-  --surface: #14181C;
-  --surface-elevated: #1D242A;
-  --text-primary: #F1F4ED;
-  --text-secondary: #87919A;
-  --border-subtle: #242C34;
-  --border-strong: #333D48;
+  --background: #07090E;
+  --surface: #0E131F;
+  --surface-elevated: #141C2B;
+  --text-primary: #F1F5F9;
+  --text-secondary: #94A3B8;
+  --border-subtle: #1B2436;
+  --border-strong: #2B3A55;
   --forge-lime: #D7FF64;
   --ultraviolet: #A78BFA;
   --ice-cyan: #65E4F3;
@@ -18,8 +18,8 @@
 
 html,
 body {
-  color: #F1F4ED;
-  background-color: #0B0D0F;
+  color: #F1F5F9;
+  background-color: #07090E;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   -webkit-font-smoothing: antialiased;
@@ -29,23 +29,50 @@ body {
   padding: 0;
 }
 
+/* Glassmorphism & Cyber Card Effects */
+.glass-panel {
+  background: rgba(14, 19, 31, 0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-panel-elevated {
+  background: rgba(20, 28, 43, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 242, 254, 0.15);
+}
+
+.neon-glow-cyan {
+  box-shadow: 0 0 20px -3px rgba(0, 242, 254, 0.25);
+}
+
+.neon-glow-emerald {
+  box-shadow: 0 0 20px -3px rgba(16, 185, 129, 0.25);
+}
+
+.neon-glow-purple {
+  box-shadow: 0 0 20px -3px rgba(139, 92, 246, 0.25);
+}
+
 /* Engineering Control Room Custom Scrollbars */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0B0D0F;
+  background: #07090E;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #242C34;
-  border-radius: 2px;
+  background: #1B2436;
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #333D48;
+  background: #2B3A55;
 }
 
 /* Code & diff styling */

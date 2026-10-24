@@ -2,11 +2,30 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, Tag, GitBranch, PlayCircle, ExternalLink, Clock, Search, Filter } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import {
+  AlertCircle,
+  Tag,
+  GitBranch,
+  PlayCircle,
+  ExternalLink,
+  Clock,
+  Search,
+  Filter,
+  Zap,
+  Sparkles,
+  FileCode,
+  CheckCircle2,
+  Copy,
+  Check,
+  Terminal,
+  RefreshCw,
+} from "lucide-react";
 import { Navbar } from "@/components/layout/Navbar";
 import { StatusBadge } from "@/components/layout/StatusBadge";
 import { api } from "@/lib/api/client";
-import { Issue, Repository, Run } from "@/types";
+import { getStoredGitHubToken } from "@/lib/auth/githubSession";
+import { Issue, Repository, Run, QuickSolverResult } from "@/types";
 import { formatDate } from "@/lib/utils";
 import { IssueDispatcherModal } from "@/components/runs/IssueDispatcherModal";
 
@@ -20,6 +39,54 @@ export default function IssuesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isDispatcherOpen, setIsDispatcherOpen] = useState(false);
+
+  // Quick Solve state
+  const [isSolving, setIsSolving] = useState(false);
+  const [quickResult, setQuickResult] = useState<QuickSolverResult | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [publishSuccessUrl, setPublishSuccessUrl] = useState<string | null>(null);
+
+  const handlePublishSolutionToGitHub = async () => {
+    if (!selectedIssue || !quickResult) return;
+    setPublishing(true);
+    setPublishSuccessUrl(null);
+    const repo = repositories[selectedIssue.repository_id];
+    const targetName = repo?.full_name || selectedIssue.repository_id;
+    let token = getStoredGitHubToken() || undefined;
+
+    if (!token) {
+      const promptToken = window.prompt(
+        "To post this solution to GitHub, please enter your GitHub Personal Access Token (with 'repo' scope):"
+      );
+      if (!promptToken || !promptToken.trim()) {
+        setPublishing(false);
+        return;
+      }
+      token = promptToken.trim();
+      localStorage.setItem("devsquad_github_token", token);
+      window.dispatchEvent(new Event("devsquad_github_session_change"));
+    }
+
+    try {
+      const res = await api.publishSolution({
+        target: targetName,
+        issue_number: selectedIssue.github_issue_number,
+        diagnosis: quickResult.problem_diagnosis,
+        root_cause: quickResult.root_cause,
+        code_patch: quickResult.code_patch,
+        verification_steps: quickResult.verification_steps,
+        add_solved_label: true,
+        close_issue: false,
+        token,
+      });
+      setPublishSuccessUrl(res.comment_url);
+    } catch (err: any) {
+      alert("Publish Error: " + (err?.message || "Failed to post solution to GitHub"));
+    } finally {
+      setPublishing(false);
+    }
+  };
 
   const loadIssues = async () => {
     setLoading(true);
@@ -49,11 +116,36 @@ export default function IssuesPage() {
 
   const selectIssue = async (issue: Issue) => {
     setSelectedIssue(issue);
+    setQuickResult(null);
     try {
       const runs = await api.getRuns(issue.repository_id);
       setRunsForIssue(runs.filter((r) => r.issue_id === issue.id));
     } catch {
       setRunsForIssue([]);
+    }
+  };
+
+  const handleQuickSolveForSelected = async () => {
+    if (!selectedIssue) return;
+    const repo = repositories[selectedIssue.repository_id];
+    const targetName = repo?.full_name || selectedIssue.repository_id;
+
+    setIsSolving(true);
+    setQuickResult(null);
+    const token = getStoredGitHubToken() || undefined;
+
+    try {
+      const res = await api.quickSolve(
+        targetName,
+        selectedIssue.body || undefined,
+        selectedIssue.github_issue_number,
+        token
+      );
+      setQuickResult(res);
+    } catch (err: any) {
+      alert("Quick Solve Error: " + (err?.message || "Analysis failed"));
+    } finally {
+      setIsSolving(false);
     }
   };
 
@@ -92,6 +184,12 @@ export default function IssuesPage() {
               <h2 className="text-xs font-mono font-bold text-text-primary uppercase tracking-wider">
                 Defect Queue ({filteredIssues.length})
               </h2>
+              <button
+                onClick={() => setIsDispatcherOpen(true)}
+                className="text-[11px] font-mono text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-bold"
+              >
+                + Dispatch Run
+              </button>
             </div>
 
             {/* Search & State Filter Controls */}
@@ -208,22 +306,122 @@ export default function IssuesPage() {
                       <span className={`text-[10px] px-2 py-0.5 rounded font-mono font-semibold border ${
                         repositories[selectedIssue.repository_id]?.full_name?.startsWith("devsquad/")
                           ? "bg-cyan-ice/15 text-cyan-ice border-cyan-ice/30"
-                          : "bg-forge-lime/15 text-forge-lime border-forge-lime/30"
+                          : "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
                       }`}>
                         {repositories[selectedIssue.repository_id]?.full_name?.startsWith("devsquad/")
                           ? "LOCAL DATABASE"
                           : "LIVE GITHUB"}
                       </span>
+                      <motion.button
+                        whileHover={{ scale: 1.03 }}
+                        whileTap={{ scale: 0.97 }}
+                        onClick={handleQuickSolveForSelected}
+                        disabled={isSolving}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-mono font-bold flex items-center gap-1.5 shadow-md disabled:opacity-50 transition-all"
+                      >
+                        <Zap className={`w-3.5 h-3.5 ${isSolving ? "animate-spin" : ""}`} />
+                        {isSolving ? "Diagnosing..." : "Instant AI Solve"}
+                      </motion.button>
                       <button
                         onClick={() => setIsDispatcherOpen(true)}
-                        className="px-3 py-1.5 rounded-lg bg-forge-lime hover:bg-forge-lime/90 text-black text-xs font-mono font-bold flex items-center gap-1.5 shadow-[0_0_10px_rgba(215,255,100,0.3)] transition-all"
+                        className="px-3 py-1.5 rounded-lg bg-surface-elevated hover:bg-surface-hover border border-border-subtle text-text-primary text-xs font-mono font-bold flex items-center gap-1.5 transition-all"
                       >
-                        <PlayCircle className="w-3.5 h-3.5" />
+                        <PlayCircle className="w-3.5 h-3.5 text-emerald-400" />
                         Launch Agent Run
                       </button>
                       <StatusBadge status={selectedIssue.state} />
                     </div>
                   </div>
+
+                  {/* Instant AI Solution Card if available */}
+                  <AnimatePresence>
+                    {quickResult && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-950/10 space-y-3"
+                      >
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-2">
+                            <Sparkles className="w-4 h-4 text-emerald-400" />
+                            <span className="text-xs font-mono font-bold text-emerald-400 uppercase tracking-wider">
+                              Instant Diagnostic & Solution
+                            </span>
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300">
+                              {quickResult.execution_time_seconds}s
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <motion.button
+                              whileHover={{ scale: 1.03 }}
+                              whileTap={{ scale: 0.97 }}
+                              disabled={publishing}
+                              onClick={handlePublishSolutionToGitHub}
+                              className="px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-mono font-bold text-[11px] flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50"
+                              title="Publish this solution comment directly to the GitHub issue thread"
+                            >
+                              {publishing ? (
+                                <>
+                                  <RefreshCw className="w-3 h-3 animate-spin text-black" />
+                                  <span>Publishing...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <ExternalLink className="w-3 h-3 text-black" />
+                                  <span>Publish to GitHub</span>
+                                </>
+                              )}
+                            </motion.button>
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(quickResult.code_patch);
+                                setCopied(true);
+                                setTimeout(() => setCopied(false), 2000);
+                              }}
+                              className="px-2 py-1 rounded bg-surface border border-border-subtle text-[11px] font-mono text-text-muted hover:text-emerald-400 flex items-center gap-1 transition-colors"
+                            >
+                              {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                              {copied ? "Copied Diff" : "Copy Diff"}
+                            </button>
+                          </div>
+                        </div>
+
+                        {publishSuccessUrl && (
+                          <div className="p-2.5 rounded-lg bg-cyan-500/15 border border-cyan-500/30 text-xs font-mono text-cyan-300 flex items-center justify-between">
+                            <span className="flex items-center gap-2 font-semibold">
+                              <CheckCircle2 className="w-4 h-4 text-cyan-400" />
+                              Solution comment published to GitHub issue!
+                            </span>
+                            <a
+                              href={publishSuccessUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-2.5 py-1 rounded bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 text-[11px] flex items-center gap-1 font-semibold transition-colors"
+                            >
+                              <span>View on GitHub</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </div>
+                        )}
+
+                        <div className="text-xs text-text-primary space-y-1.5">
+                          <div>
+                            <strong className="text-emerald-400 text-[11px] font-mono uppercase block">Root Cause:</strong>
+                            <p className="text-xs bg-surface p-2 rounded border border-border-subtle font-mono text-emerald-300">
+                              {quickResult.root_cause}
+                            </p>
+                          </div>
+                          <div>
+                            <strong className="text-text-muted text-[11px] font-mono uppercase block mt-2">Proposed Fix Diff:</strong>
+                            <pre className="p-3 rounded bg-background border border-border-subtle font-mono text-[11px] text-text-primary overflow-x-auto max-h-48 whitespace-pre-wrap">
+                              {quickResult.code_patch}
+                            </pre>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
                   {/* Labels */}
                   {selectedIssue.labels && selectedIssue.labels.length > 0 && (

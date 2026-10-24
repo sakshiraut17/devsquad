@@ -16,6 +16,12 @@ import {
   SecurityScanResult,
   User,
   WorkflowStateSnapshot,
+  GitHubUserProfile,
+  GitHubAccountIssue,
+  QuickSolverResult,
+  GitHubInspectResult,
+  GitHubTokenPermissions,
+  PublishSolutionResult,
 } from "@/types";
 import { getSessionToken, setSession } from "../auth/session";
 
@@ -72,7 +78,20 @@ async function fetchWithAuth<T>(
       throw new ApiError(message, res.status, errorBody);
     }
 
-    return (await res.json()) as T;
+    if (res.status === 204 || res.headers.get("content-length") === "0") {
+      return {} as T;
+    }
+
+    const text = await res.text();
+    if (!text || text.trim() === "") {
+      return {} as T;
+    }
+
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      return text as unknown as T;
+    }
   } catch (err: any) {
     clearTimeout(timeoutId);
     if (err.name === "AbortError") {
@@ -123,6 +142,12 @@ export const api = {
     return fetchWithAuth<Repository>(`/api/v1/repositories/${id}`);
   },
 
+  async deleteRepository(id: string): Promise<void> {
+    await fetchWithAuth<void>(`/api/v1/repositories/${id}`, {
+      method: "DELETE",
+    });
+  },
+
   async getRepositoryGitHubIssues(
     repositoryId: string,
     state = "open",
@@ -166,6 +191,26 @@ export const api = {
 
   async getIssue(id: string): Promise<Issue> {
     return fetchWithAuth<Issue>(`/api/v1/issues/${id}`);
+  },
+
+  async createIssue(payload: {
+    repository_id: string;
+    github_issue_number?: number;
+    title: string;
+    body?: string;
+    state?: string;
+    labels?: string[];
+    html_url?: string;
+  }): Promise<Issue> {
+    return fetchWithAuth<Issue>("/api/v1/issues", {
+      method: "POST",
+      body: JSON.stringify({
+        ...payload,
+        github_issue_number: payload.github_issue_number || Math.floor(Math.random() * 9000) + 100,
+        state: payload.state || "open",
+        labels: payload.labels || ["defect", "user-reported"],
+      }),
+    });
   },
 
   // Runs
@@ -372,5 +417,122 @@ export const api = {
         eventSource.close();
       }
     };
+  },
+
+  // GitHub Real-time & Quick Solver
+  async connectGitHub(
+    token?: string,
+    username?: string
+  ): Promise<{
+    success: boolean;
+    profile: GitHubUserProfile;
+    is_authenticated: boolean;
+    permissions?: GitHubTokenPermissions | null;
+  }> {
+    return fetchWithAuth<{
+      success: boolean;
+      profile: GitHubUserProfile;
+      is_authenticated: boolean;
+      permissions?: GitHubTokenPermissions | null;
+    }>(
+      "/api/v1/github/connect",
+      {
+        method: "POST",
+        body: JSON.stringify({ token, username }),
+      }
+    );
+  },
+
+  async getTokenPermissions(token?: string): Promise<GitHubTokenPermissions> {
+    const params = new URLSearchParams();
+    if (token) params.set("token", token);
+    return fetchWithAuth<GitHubTokenPermissions>(
+      `/api/v1/github/token-permissions${params.toString() ? `?${params.toString()}` : ""}`
+    );
+  },
+
+  async getUserRepositories(
+    username?: string,
+    token?: string,
+    page = 1,
+    perPage = 30
+  ): Promise<any[]> {
+    const params = new URLSearchParams({ page: String(page), per_page: String(perPage) });
+    if (username) params.set("username", username);
+    if (token) params.set("token", token);
+    return fetchWithAuth<any[]>(`/api/v1/github/user/repos?${params.toString()}`);
+  },
+
+  async getUserIssues(
+    username?: string,
+    token?: string,
+    state = "open",
+    page = 1,
+    perPage = 30
+  ): Promise<GitHubAccountIssue[]> {
+    const params = new URLSearchParams({ state, page: String(page), per_page: String(perPage) });
+    if (username) params.set("username", username);
+    if (token) params.set("token", token);
+    return fetchWithAuth<GitHubAccountIssue[]>(`/api/v1/github/user/issues?${params.toString()}`);
+  },
+
+  async inspectRepository(
+    url: string,
+    token?: string
+  ): Promise<GitHubInspectResult> {
+    return fetchWithAuth<GitHubInspectResult>("/api/v1/github/inspect", {
+      method: "POST",
+      body: JSON.stringify({ url, token }),
+    });
+  },
+
+  async quickSolve(
+    target: string,
+    customProblem?: string,
+    issueNumber?: number,
+    token?: string
+  ): Promise<QuickSolverResult> {
+    return fetchWithAuth<QuickSolverResult>("/api/v1/github/quick-solve", {
+      method: "POST",
+      body: JSON.stringify({
+        target,
+        custom_problem: customProblem,
+        issue_number: issueNumber,
+        token,
+      }),
+    }, 45000);
+  },
+
+  async importRepository(
+    target: string,
+    syncIssues = true,
+    token?: string
+  ): Promise<{ success: boolean; repository: any; synced_issues_count: number }> {
+    return fetchWithAuth<{ success: boolean; repository: any; synced_issues_count: number }>(
+      "/api/v1/github/import-repository",
+      {
+        method: "POST",
+        body: JSON.stringify({ target, sync_issues: syncIssues, token }),
+      }
+    );
+  },
+
+  async publishSolution(payload: {
+    target: string;
+    issue_number?: number | null;
+    issue_title?: string;
+    diagnosis?: string;
+    root_cause?: string;
+    code_patch?: string;
+    verification_steps?: string[];
+    custom_comment?: string;
+    close_issue?: boolean;
+    add_solved_label?: boolean;
+    token?: string;
+  }): Promise<PublishSolutionResult> {
+    return fetchWithAuth<PublishSolutionResult>("/api/v1/github/publish-solution", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   },
 };

@@ -29,6 +29,14 @@ async def test_repository_crud_and_conflict(async_client: AsyncClient):
     assert len(repos) >= 1
     assert any(r["id"] == created_repo["id"] for r in repos)
 
+    # 4. Delete repository
+    del_res = await async_client.delete(f"/api/v1/repositories/{created_repo['id']}")
+    assert del_res.status_code == 204
+
+    # 5. Get deleted repository must fail with 404
+    get_res = await async_client.get(f"/api/v1/repositories/{created_repo['id']}")
+    assert get_res.status_code == 404
+
 
 @pytest.mark.asyncio
 async def test_issue_crud_and_validation(async_client: AsyncClient):
