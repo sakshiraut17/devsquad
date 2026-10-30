@@ -22,6 +22,7 @@ import {
   GitHubInspectResult,
   GitHubTokenPermissions,
   PublishSolutionResult,
+  CreatePullRequestResult,
 } from "@/types";
 import { getSessionToken, setSession } from "../auth/session";
 
@@ -531,6 +532,25 @@ export const api = {
     token?: string;
   }): Promise<PublishSolutionResult> {
     return fetchWithAuth<PublishSolutionResult>("/api/v1/github/publish-solution", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async createPullRequest(payload: {
+    target: string;
+    issue_number?: number | null;
+    issue_title?: string;
+    branch_name?: string;
+    pr_title?: string;
+    diagnosis?: string;
+    root_cause?: string;
+    code_patch: string;
+    verification_steps?: string[];
+    draft?: boolean;
+    token?: string;
+  }): Promise<CreatePullRequestResult> {
+    return fetchWithAuth<CreatePullRequestResult>("/api/v1/github/create-pr", {
       method: "POST",
       body: JSON.stringify(payload),
     });

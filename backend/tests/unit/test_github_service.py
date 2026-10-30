@@ -294,3 +294,33 @@ async def test_post_issue_comment_and_close():
         closed = await svc.close_issue("octocat", "Hello-World", 1)
         assert closed["state"] == "closed"
 
+
+@pytest.mark.asyncio
+async def test_create_branch_and_pull_request():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST" and request.url.path == "/repos/octocat/Hello-World/git/refs":
+            return httpx.Response(201, json={"ref": "refs/heads/devsquad/fix-1", "object": {"sha": "c" * 40}})
+        if request.method == "PUT" and request.url.path == "/repos/octocat/Hello-World/contents/app.py":
+            return httpx.Response(200, json={"content": {"name": "app.py", "path": "app.py", "sha": "d" * 40}})
+        if request.method == "POST" and request.url.path == "/repos/octocat/Hello-World/pulls":
+            return httpx.Response(201, json={"id": 42, "number": 7, "html_url": "https://github.com/octocat/Hello-World/pull/7"})
+        return httpx.Response(404)
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        svc = GitHubService(token="ghp_test123", base_url="https://api.github.com", http_client=client)
+        branch = await svc.create_branch("octocat", "Hello-World", "devsquad/fix-1", "c" * 40)
+        assert branch["ref"] == "refs/heads/devsquad/fix-1"
+
+        commit = await svc.update_file_contents(
+            "octocat", "Hello-World", "app.py", "print('hello')", "fix: test", "devsquad/fix-1"
+        )
+        assert commit["content"]["name"] == "app.py"
+
+        pr = await svc.create_pull_request(
+            "octocat", "Hello-World", "Fix issue #1", "devsquad/fix-1", "main", "Automated PR"
+        )
+        assert pr["number"] == 7
+        assert "pull/7" in pr["html_url"]
+
+

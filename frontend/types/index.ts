@@ -424,3 +424,15 @@ export interface GitHubInspectResult {
   file_tree_sample: string[];
 }
 
+export interface CreatePullRequestResult {
+  success: boolean;
+  pr_url: string;
+  pr_number: number;
+  branch: string;
+  base_branch: string;
+  committed_files: string[];
+  patch_hash: string;
+  message: string;
+}
+
+

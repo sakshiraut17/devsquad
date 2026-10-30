@@ -28,6 +28,7 @@ import {
   CornerDownRight,
   Flame,
   Github,
+  GitPullRequest,
   RefreshCw,
 } from "lucide-react";
 import { api } from "@/lib/api/client";
@@ -57,6 +58,57 @@ export function QuickSolverSection({
   const [publishingToGitHub, setPublishingToGitHub] = useState(false);
   const [publishSuccessUrl, setPublishSuccessUrl] = useState<string | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
+
+  // GitHub Pull Request Generation State
+  const [creatingPR, setCreatingPR] = useState(false);
+  const [prSuccessUrl, setPrSuccessUrl] = useState<string | null>(null);
+  const [prNumber, setPrNumber] = useState<number | null>(null);
+  const [prError, setPrError] = useState<string | null>(null);
+
+  const handleCreatePullRequest = async () => {
+    if (!result || !result.code_patch) return;
+    setCreatingPR(true);
+    setPrError(null);
+    setPrSuccessUrl(null);
+    setPrNumber(null);
+
+    let token = getStoredGitHubToken() || undefined;
+    if (!token) {
+      const promptToken = window.prompt(
+        "To create a Pull Request on GitHub, please enter your GitHub Personal Access Token (with 'repo' scope):"
+      );
+      if (!promptToken || !promptToken.trim()) {
+        setPrError("A GitHub Personal Access Token with 'repo' scope is required to create a Pull Request.");
+        setCreatingPR(false);
+        return;
+      }
+      token = promptToken.trim();
+      localStorage.setItem("devsquad_github_token", token);
+      window.dispatchEvent(new Event("devsquad_github_session_change"));
+    }
+
+    try {
+      const res = await api.createPullRequest({
+        target: result.repository_name || targetUrl,
+        issue_number: result.issue_number || null,
+        issue_title: result.issue_title,
+        diagnosis: result.problem_diagnosis,
+        root_cause: result.root_cause,
+        code_patch: result.code_patch,
+        verification_steps: result.verification_steps,
+        token,
+      });
+      setPrSuccessUrl(res.pr_url);
+      setPrNumber(res.pr_number);
+    } catch (err: any) {
+      setPrError(
+        err?.message || "Failed to create Pull Request on GitHub. Verify your token has 'repo' scope."
+      );
+    } finally {
+      setCreatingPR(false);
+    }
+  };
+
 
   const handlePublishToGitHub = async () => {
     if (!result) return;
@@ -578,11 +630,32 @@ export function QuickSolverSection({
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 shrink-0 flex-wrap">
                 <motion.button
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.97 }}
-                  disabled={publishingToGitHub}
+                  disabled={creatingPR || publishingToGitHub}
+                  onClick={handleCreatePullRequest}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-400 hover:to-indigo-400 text-white font-mono font-bold text-xs flex items-center gap-2 shadow-md transition-all disabled:opacity-50"
+                  title="Create a new branch, commit this patch, and open a Pull Request directly on GitHub"
+                >
+                  {creatingPR ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-white" />
+                      <span>Opening PR...</span>
+                    </>
+                  ) : (
+                    <>
+                      <GitPullRequest className="w-3.5 h-3.5 text-white" />
+                      <span>Create Pull Request</span>
+                    </>
+                  )}
+                </motion.button>
+
+                <motion.button
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                  disabled={publishingToGitHub || creatingPR}
                   onClick={handlePublishToGitHub}
                   className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-400 hover:from-emerald-400 hover:to-cyan-300 text-black font-mono font-bold text-xs flex items-center gap-2 shadow-md transition-all disabled:opacity-50"
                   title="Post this diagnostic and code solution directly as an issue comment on GitHub"
@@ -601,6 +674,48 @@ export function QuickSolverSection({
                 </motion.button>
               </div>
             </div>
+
+            {prSuccessUrl && (
+              <motion.div
+                initial={{ opacity: 0, y: -5 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mx-6 mb-3 p-3.5 rounded-xl bg-purple-500/15 border border-purple-500/30 text-xs font-mono text-purple-200 flex items-center justify-between shadow-sm"
+              >
+                <span className="flex items-center gap-2 font-semibold">
+                  <GitPullRequest className="w-4 h-4 text-purple-400 shrink-0" />
+                  Pull Request #{prNumber || ""} successfully created on GitHub!
+                </span>
+                <a
+                  href={prSuccessUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1 rounded-lg bg-purple-500/30 hover:bg-purple-500/45 text-purple-100 font-bold flex items-center gap-1.5 transition-colors"
+                >
+                  <span>View PR on GitHub</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </motion.div>
+            )}
+
+            {prError && (
+              <motion.div
+                initial={{ opacity: 0, y: -5 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mx-6 mb-3 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs font-mono text-rose-300 flex items-center justify-between"
+              >
+                <span className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                  {prError}
+                </span>
+                <button
+                  onClick={() => setPrError(null)}
+                  className="text-[10px] text-text-muted hover:text-white ml-2"
+                >
+                  ✕
+                </button>
+              </motion.div>
+            )}
+
 
             {publishSuccessUrl && (
               <motion.div

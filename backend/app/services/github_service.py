@@ -664,3 +664,73 @@ class GitHubService:
             return [lbl["name"] if isinstance(lbl, dict) else str(lbl) for lbl in data]
         return labels
 
+    async def get_reference(self, owner: str, repo: str, ref: str) -> dict[str, Any]:
+        """Fetch git reference details (e.g. 'heads/main')."""
+        clean_ref = ref.lstrip("refs/")
+        url = f"{self.base_url}/repos/{owner}/{repo}/git/ref/{clean_ref}"
+        resp = await self.client.get(url)
+        self._handle_response_error(resp, f"get ref {ref} on {owner}/{repo}")
+        return resp.json()
+
+    async def create_branch(
+        self, owner: str, repo: str, branch_name: str, base_sha: str
+    ) -> dict[str, Any]:
+        """Create a new Git branch pointing to base_sha."""
+        url = f"{self.base_url}/repos/{owner}/{repo}/git/refs"
+        resp = await self.client.post(
+            url,
+            json={"ref": f"refs/heads/{branch_name}", "sha": base_sha},
+        )
+        self._handle_response_error(resp, f"create branch {branch_name} on {owner}/{repo}")
+        return resp.json()
+
+    async def update_file_contents(
+        self,
+        owner: str,
+        repo: str,
+        file_path: str,
+        content: str,
+        message: str,
+        branch: str,
+        sha: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Create or update file contents in a branch via GitHub Contents API."""
+        url = f"{self.base_url}/repos/{owner}/{repo}/contents/{file_path}"
+        b64_content = base64.b64encode(content.encode("utf-8")).decode("ascii")
+        payload: dict[str, Any] = {
+            "message": message,
+            "content": b64_content,
+            "branch": branch,
+        }
+        if sha:
+            payload["sha"] = sha
+        resp = await self.client.put(url, json=payload)
+        self._handle_response_error(resp, f"commit file {file_path} on branch {branch}")
+        return resp.json()
+
+    async def create_pull_request(
+        self,
+        owner: str,
+        repo: str,
+        title: str,
+        head: str,
+        base: str,
+        body: str,
+        draft: bool = False,
+    ) -> dict[str, Any]:
+        """Create a pull request on GitHub."""
+        url = f"{self.base_url}/repos/{owner}/{repo}/pulls"
+        resp = await self.client.post(
+            url,
+            json={
+                "title": title,
+                "head": head,
+                "base": base,
+                "body": body,
+                "draft": draft,
+            },
+        )
+        self._handle_response_error(resp, f"create pull request on {owner}/{repo}")
+        return resp.json()
+
+
