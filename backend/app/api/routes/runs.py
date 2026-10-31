@@ -477,18 +477,6 @@ async def approve_run(
     except Exception:
         pass
 
-    # Idempotent response if run is already approved
-    if run.status == RunStatus.APPROVED.value and payload.decision == "approved":
-        existing_approval_query = (
-            select(ApprovalRecord)
-            .where(ApprovalRecord.run_id == run.id)
-            .order_by(ApprovalRecord.created_at.desc())
-            .limit(1)
-        )
-        existing = (await db.execute(existing_approval_query)).scalars().first()
-        if existing:
-            return existing
-
     # Ensure run is in an awaiting approval state
     if run.status != RunStatus.AWAITING_APPROVAL.value:
         conflict_statuses = (RunStatus.APPROVED.value, RunStatus.REJECTED.value, RunStatus.COMPLETED.value)
