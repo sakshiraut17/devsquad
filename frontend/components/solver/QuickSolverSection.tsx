@@ -340,7 +340,7 @@ export function QuickSolverSection({
             </h2>
             <p className="text-sm text-text-secondary mt-2 leading-relaxed font-sans max-w-xl">
               Paste a link to <strong className="text-cyan-300">any GitHub repository or issue</strong>.
-              DevSquad's multi-agent team ingests repository AST, isolates the defect, and synthesizes minimal, test-verified patches.
+              DevSquad&apos;s multi-agent team ingests repository AST, isolates the defect, and synthesizes minimal, test-verified patches.
             </p>
           </div>
 
