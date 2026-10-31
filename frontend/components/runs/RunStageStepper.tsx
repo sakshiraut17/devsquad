@@ -13,6 +13,7 @@ const STAGES = [
   { key: "context", label: "CONTEXT", color: "cyan" },
   { key: "planner", label: "PLAN", color: "ultraviolet" },
   { key: "coder", label: "PATCH", color: "lime" },
+  { key: "security", label: "SECURITY", color: "rose" },
   { key: "tester", label: "TEST", color: "cyan" },
   { key: "reviewer", label: "REVIEW", color: "amber" },
   { key: "approval", label: "HUMAN GATE", color: "lime" },
@@ -28,9 +29,10 @@ export function RunStageStepper({
     if (s.includes("context") || s.includes("ingest") || s.includes("validat")) return 0;
     if (s.includes("plan")) return 1;
     if (s.includes("code") || s.includes("patch")) return 2;
-    if (s.includes("test")) return 3;
-    if (s.includes("review") || s.includes("repair")) return 4;
-    if (s.includes("approv") || s.includes("wait") || s.includes("gate")) return 5;
+    if (s.includes("security")) return 3;
+    if (s.includes("test")) return 4;
+    if (s.includes("review") || s.includes("repair")) return 5;
+    if (s.includes("approv") || s.includes("wait") || s.includes("gate") || s.includes("final")) return 6;
     return -1;
   };
 

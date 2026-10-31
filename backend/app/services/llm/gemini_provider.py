@@ -134,3 +134,36 @@ class GeminiProvider(LLMProvider):
             provider="gemini",
             usage=usage,
         )
+
+    async def generate_text(
+        self,
+        prompt: str,
+        system_instruction: str = "",
+        temperature: float = 0.2,
+    ) -> str:
+        """Generate free-form text using Gemini API."""
+        full_system_prompt = f"{SYSTEM_SECURITY_POLICY}\n\n{system_instruction}".strip() if system_instruction else SYSTEM_SECURITY_POLICY
+        config = types.GenerateContentConfig(
+            system_instruction=full_system_prompt,
+            temperature=temperature,
+        )
+        max_attempts = 3
+        last_error = None
+        for attempt in range(max_attempts):
+            try:
+                resp = await asyncio.wait_for(
+                    self.client.aio.models.generate_content(
+                        model=self._model,
+                        contents=prompt,
+                        config=config,
+                    ),
+                    timeout=self.timeout,
+                )
+                return resp.text or ""
+            except Exception as exc:
+                if attempt < max_attempts - 1:
+                    await asyncio.sleep(0.5 * (2 ** attempt))
+                    last_error = exc
+                    continue
+                raise LLMError(f"Gemini generate_text failed: {str(exc)}") from exc
+        raise LLMError("Gemini generate_text failed after retries.")

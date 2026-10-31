@@ -427,6 +427,7 @@ export interface GitHubInspectResult {
 export interface CreatePullRequestResult {
   success: boolean;
   pr_url: string;
+  html_url?: string;
   pr_number: number;
   branch: string;
   base_branch: string;

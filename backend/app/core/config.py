@@ -11,7 +11,7 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="DEVSQUAD_",
-        env_file=".env",
+        env_file=(".env", "backend/.env", "../backend/.env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o"
     openai_base_url: Optional[str] = None
     groq_api_key: SecretStr = SecretStr("")
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "openai/gpt-oss-120b"
     groq_base_url: str = "https://api.groq.com/openai/v1"
 
     # GitHub Integration

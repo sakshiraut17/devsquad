@@ -177,16 +177,16 @@ export default function IssuesPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 font-sans">
           {/* Issue Browser Left Rail */}
-          <div className="lg:col-span-1 space-y-3">
+          <div className="lg:col-span-1 space-y-3.5">
             <div className="flex items-center justify-between">
-              <h2 className="text-xs font-mono font-bold text-text-primary uppercase tracking-wider">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
                 Defect Queue ({filteredIssues.length})
               </h2>
               <button
                 onClick={() => setIsDispatcherOpen(true)}
-                className="text-[11px] font-mono text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-bold"
+                className="text-xs font-semibold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition-colors"
               >
                 + Dispatch Run
               </button>
@@ -195,22 +195,22 @@ export default function IssuesPage() {
             {/* Search & State Filter Controls */}
             <div className="space-y-2">
               <div className="relative">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-text-muted" />
+                <Search className="w-4 h-4 absolute left-3 top-3 text-text-muted" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search issues..."
-                  className="w-full pl-9 pr-3 py-1.5 rounded bg-surface border border-border-subtle text-xs font-mono text-text-primary placeholder-text-muted focus:outline-none focus:border-forge-lime"
+                  className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-surface-elevated/70 border border-border-subtle text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 transition-all"
                 />
               </div>
 
               <div className="flex items-center gap-2">
-                <Filter className="w-3 h-3 text-text-muted" />
+                <Filter className="w-3.5 h-3.5 text-text-muted" />
                 <select
                   value={filterState}
                   onChange={(e) => setFilterState(e.target.value)}
-                  className="w-full py-1 px-2 rounded bg-surface border border-border-subtle text-xs font-mono text-text-secondary focus:outline-none focus:border-forge-lime"
+                  className="w-full py-2 px-3 rounded-xl bg-surface-elevated/70 border border-border-subtle text-xs text-text-secondary focus:outline-none focus:border-cyan-400"
                 >
                   <option value="ALL">All States</option>
                   <option value="open">Open</option>
@@ -220,16 +220,16 @@ export default function IssuesPage() {
             </div>
 
             {loading ? (
-              <div className="space-y-2">
-                <div className="h-20 bg-surface animate-pulse rounded border border-border-subtle" />
-                <div className="h-20 bg-surface animate-pulse rounded border border-border-subtle" />
+              <div className="space-y-2.5">
+                <div className="h-24 bg-surface-elevated animate-pulse rounded-2xl border border-border-subtle" />
+                <div className="h-24 bg-surface-elevated animate-pulse rounded-2xl border border-border-subtle" />
               </div>
             ) : filteredIssues.length === 0 ? (
-              <div className="p-6 text-center text-xs font-mono text-text-muted bg-surface border border-border-subtle rounded-lg">
+              <div className="p-8 text-center text-xs text-text-muted bg-surface/80 border border-border-subtle rounded-2xl">
                 No issues match your filter query.
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 {filteredIssues.map((issue) => {
                   const isSelected = selectedIssue?.id === issue.id;
                   const repo = repositories[issue.repository_id];
@@ -238,34 +238,34 @@ export default function IssuesPage() {
                     <div
                       key={issue.id}
                       onClick={() => selectIssue(issue)}
-                      className={`p-3.5 rounded-lg border cursor-pointer transition-all relative ${
+                      className={`p-4 rounded-2xl border cursor-pointer transition-all relative ${
                         isSelected
-                          ? "bg-surface-elevated border-forge-lime/50 shadow-md ring-1 ring-forge-lime/30"
-                          : "bg-surface border-border-subtle hover:border-border-strong hover:bg-surface-elevated/50"
+                          ? "bg-surface-elevated border-cyan-400/50 shadow-md ring-1 ring-cyan-400/30"
+                          : "bg-surface/90 border-border-subtle hover:border-border-strong hover:bg-surface-elevated/60"
                       }`}
                     >
                       {isSelected && (
-                        <span className="absolute left-0 top-2 bottom-2 w-1 rounded-r bg-forge-lime" />
+                        <span className="absolute left-0 top-3 bottom-3 w-1 rounded-r bg-cyan-400" />
                       )}
-                      <div className="flex items-start justify-between gap-2 mb-1.5 pl-1">
-                        <span className="font-semibold text-xs text-text-primary font-mono leading-snug">
+                      <div className="flex items-start justify-between gap-2 mb-2 pl-1">
+                        <span className="font-semibold text-sm text-text-primary leading-snug">
                           #{issue.github_issue_number} {issue.title}
                         </span>
                         <div className="flex flex-col items-end gap-1 shrink-0">
                           <StatusBadge status={issue.state} size="sm" />
-                          <span className={`text-[9px] px-1.5 py-0.2 rounded font-mono ${
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-medium ${
                             repo?.full_name?.startsWith("devsquad/")
-                              ? "bg-cyan-ice/10 text-cyan-ice border border-cyan-ice/20"
-                              : "bg-forge-lime/10 text-forge-lime border border-forge-lime/20"
+                              ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"
+                              : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
                           }`}>
                             {repo?.full_name?.startsWith("devsquad/") ? "LOCAL DB" : "LIVE GITHUB"}
                           </span>
                         </div>
                       </div>
 
-                      <div className="text-[11px] text-text-muted font-mono flex items-center gap-2 pl-1">
-                        <GitBranch className="w-3 h-3 text-forge-lime" />
-                        <span className="truncate">
+                      <div className="text-xs text-text-muted flex items-center gap-2 pl-1">
+                        <GitBranch className="w-3.5 h-3.5 text-cyan-400" />
+                        <span className="truncate font-mono">
                           {repo ? repo.full_name : issue.repository_id.slice(0, 8)}
                         </span>
                       </div>

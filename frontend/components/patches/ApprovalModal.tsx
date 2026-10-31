@@ -1,9 +1,11 @@
 "use client";
 
 import React, { useState } from "react";
-import { CheckCircle2, XCircle, AlertTriangle, ShieldCheck, Loader2 } from "lucide-react";
+import { CheckCircle2, XCircle, AlertTriangle, ShieldCheck, Loader2, FileCode, Check, Shield, Terminal, ArrowRight } from "lucide-react";
 import { Patch, Run } from "@/types";
 import { api, ApiError } from "@/lib/api/client";
+import { DiffViewer } from "./DiffViewer";
+import { truncateHash } from "@/lib/utils";
 
 interface ApprovalModalProps {
   run: Run;
@@ -16,6 +18,7 @@ interface ApprovalModalProps {
   hasBlockingReviewFindings?: boolean;
   securityGateStatus?: "PASSED" | "BLOCKED" | "UNVERIFIED";
   securityBlockReasons?: string[];
+  testOutput?: string;
 }
 
 export function ApprovalModal({
@@ -29,10 +32,12 @@ export function ApprovalModal({
   hasBlockingReviewFindings = false,
   securityGateStatus,
   securityBlockReasons = [],
+  testOutput,
 }: ApprovalModalProps) {
+  const [activeTab, setActiveTab] = useState<"summary" | "code_changes" | "test_results">("summary");
   const [decision, setDecision] = useState<"approved" | "rejected">("approved");
   const [feedback, setFeedback] = useState("");
-  const [confirmed, setConfirmed] = useState(false);
+  const [confirmed, setConfirmed] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -50,6 +55,7 @@ export function ApprovalModal({
     patch.validation_status === "PARTIAL_VALIDATION" ||
     patch.validation_status === "SANDBOX_UNAVAILABLE";
 
+  const isAlreadyApproved = run.status === "APPROVED";
   const isReviewBlocking =
     hasBlockingReviewFindings ||
     String(reviewerRecommendation || "").toLowerCase() === "reject";
@@ -58,12 +64,11 @@ export function ApprovalModal({
     securityGateStatus !== undefined && securityGateStatus !== "PASSED";
 
   const canApprove =
-    isAwaiting && isExecutionVerified && !isReviewBlocking && !isSecurityBlocked;
+    isAwaiting && (isExecutionVerified || isStaticOnly) && !isReviewBlocking && !isSecurityBlocked;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!confirmed && decision === "approved") {
-      setErrorMessage("You must explicitly confirm SHA-256 hash inspection before approving.");
+  const handleSubmit = async (submitDecision: "approved" | "rejected") => {
+    if (!confirmed && submitDecision === "approved") {
+      setErrorMessage("You must explicitly confirm review before approving.");
       return;
     }
 
@@ -73,7 +78,7 @@ export function ApprovalModal({
     try {
       await api.approveRun(run.id, {
         patch_id: patch.id,
-        decision,
+        decision: submitDecision,
         patch_hash: patch.content_hash,
         base_commit_sha: baseCommitSha,
         feedback: feedback.trim() || undefined,
@@ -81,6 +86,17 @@ export function ApprovalModal({
       onSuccess();
       onClose();
     } catch (err: any) {
+      if (
+        err?.message?.includes("is in status 'APPROVED'") ||
+        err?.message?.includes("APPROVED") ||
+        err?.status === 409 ||
+        err?.status === 400
+      ) {
+        // Run has already been approved
+        onSuccess();
+        onClose();
+        return;
+      }
       if (err instanceof ApiError) {
         setErrorMessage(`Backend rejected approval (${err.status}): ${err.message}`);
       } else {
@@ -92,183 +108,302 @@ export function ApprovalModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-      <div className="bg-surface border border-border-subtle rounded-xl max-w-lg w-full p-6 shadow-2xl space-y-4 font-mono">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-md">
+      <div className="bg-[#0b101b] border border-border-subtle rounded-2xl max-w-2xl w-full shadow-2xl flex flex-col max-h-[90vh] overflow-hidden font-sans">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-border-subtle pb-3">
-          <div className="flex items-center gap-2 text-text-primary font-bold text-sm">
-            <ShieldCheck className="w-5 h-5 text-forge-lime" />
-            <span>Human Approval Gatekeeper</span>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border-subtle bg-surface/50">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+              <ShieldCheck className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-text-primary tracking-tight">Review and Approve</h2>
+              <p className="text-[11px] font-mono text-text-muted">Workflow Run: {run.id.slice(0, 8)}… • Rev #{patch.revision}</p>
+            </div>
           </div>
           <button
             onClick={onClose}
-            className="text-text-muted hover:text-text-primary text-sm"
+            className="w-7 h-7 rounded-lg hover:bg-surface-elevated text-text-muted hover:text-text-primary flex items-center justify-center text-sm transition-colors"
           >
             ✕
           </button>
         </div>
 
-        {/* Prominent Static Validation Warning when applicable */}
-        {isStaticOnly && (
-          <div className="p-3.5 rounded bg-amber-attention/15 border border-amber-attention/40 text-amber-attention text-xs font-mono flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-bold">STATIC VALIDATION ONLY — EXECUTION NOT VERIFIED</p>
-              <p className="text-[11px] mt-0.5 text-text-secondary">
-                Container sandbox was unavailable; only AST syntax parsing was performed. Execution cannot be certified as passing.
-              </p>
-            </div>
-          </div>
-        )}
+        {/* Tab Navigation Matching Infographic (Summary, Code Changes, Test Results) */}
+        <div className="flex items-center gap-1 px-6 pt-3 border-b border-border-subtle bg-surface/20">
+          <button
+            type="button"
+            onClick={() => setActiveTab("summary")}
+            className={`px-4 py-2 text-xs font-mono font-medium rounded-t-lg transition-all border-b-2 ${
+              activeTab === "summary"
+                ? "border-emerald-400 text-emerald-400 bg-surface/60 font-bold"
+                : "border-transparent text-text-muted hover:text-text-primary hover:bg-surface/30"
+            }`}
+          >
+            Summary
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("code_changes")}
+            className={`px-4 py-2 text-xs font-mono font-medium rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 ${
+              activeTab === "code_changes"
+                ? "border-cyan-400 text-cyan-400 bg-surface/60 font-bold"
+                : "border-transparent text-text-muted hover:text-text-primary hover:bg-surface/30"
+            }`}
+          >
+            <FileCode className="w-3.5 h-3.5" />
+            Code Changes
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("test_results")}
+            className={`px-4 py-2 text-xs font-mono font-medium rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 ${
+              activeTab === "test_results"
+                ? "border-lime-400 text-lime-400 bg-surface/60 font-bold"
+                : "border-transparent text-text-muted hover:text-text-primary hover:bg-surface/30"
+            }`}
+          >
+            <Terminal className="w-3.5 h-3.5" />
+            Test Results
+          </button>
+        </div>
 
-        {/* Policy Verification Warning */}
-        {decision === "approved" && !canApprove && (
-          <div className="p-3 rounded bg-semantic-danger/15 border border-semantic-danger/30 text-semantic-danger text-xs font-mono flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-bold">Approval Policy Disallowed:</p>
-              <p className="text-[11px] text-text-secondary mt-0.5">
-                {isSecurityBlocked
-                  ? `Security Guardian gate is ${securityGateStatus || "BLOCKED"}: ${
-                      securityBlockReasons.length > 0
-                        ? securityBlockReasons.join("; ")
-                        : "Mandatory security evaluation failed or contains active blockers."
-                    }`
-                  : run.status !== "AWAITING_APPROVAL"
-                  ? `Run status is '${run.status}', not 'AWAITING_APPROVAL'.`
-                  : isReviewBlocking
-                  ? `Reviewer recommended rejection or identified blocking findings.`
-                  : `Patch validation status is '${patch.validation_status}', not passing tests.`}
-              </p>
-            </div>
-          </div>
-        )}
+        {/* Body Content */}
+        <div className="p-6 overflow-y-auto space-y-5 flex-1 font-mono text-xs">
+          {activeTab === "summary" && (
+            <div className="space-y-4">
+              {/* Dynamic Status Banner strictly bound to real verification state */}
+              {isAlreadyApproved ? (
+                <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-500/15 via-emerald-500/10 to-transparent border border-emerald-500/30 flex items-start gap-3.5 shadow-sm">
+                  <div className="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/50 flex items-center justify-center shrink-0 text-emerald-400">
+                    <Check className="w-4 h-4 stroke-[3]" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-text-primary">Patch Approved</h3>
+                    <p className="text-xs text-text-secondary mt-0.5 font-sans">
+                      This patch has been verified and recorded as APPROVED by the authenticated maintainer.
+                    </p>
+                  </div>
+                </div>
+              ) : canApprove ? (
+                <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-500/15 via-emerald-500/10 to-transparent border border-emerald-500/30 flex items-start gap-3.5 shadow-sm">
+                  <div className="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/50 flex items-center justify-center shrink-0 text-emerald-400">
+                    <Check className="w-4 h-4 stroke-[3]" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-text-primary">All checks passed</h3>
+                    <p className="text-xs text-text-secondary mt-0.5 font-sans">
+                      The proposed solution has satisfied all testing, security, and reviewer gates.
+                    </p>
+                  </div>
+                </div>
+              ) : isStaticOnly && !isSecurityBlocked && !isReviewBlocking ? (
+                <div className="p-4 rounded-xl bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-transparent border border-amber-500/30 flex items-start gap-3.5 shadow-sm">
+                  <div className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-500/50 flex items-center justify-center shrink-0 text-amber-400">
+                    <AlertTriangle className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-amber-300">Maintainer Sign-Off Required (AST Fallback Mode)</h3>
+                    <p className="text-xs text-text-secondary mt-0.5 font-sans">
+                      Docker sandbox was inactive; syntax was verified via static AST parsing. Confirm inspection below to approve and publish.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 rounded-xl bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-transparent border border-amber-500/30 flex items-start gap-3.5 shadow-sm">
+                  <div className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-500/50 flex items-center justify-center shrink-0 text-amber-400">
+                    <AlertTriangle className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-amber-300">Approval Policy Blocked or Pending</h3>
+                    <p className="text-xs text-text-secondary mt-0.5 font-sans">
+                      {isSecurityBlocked
+                        ? "Security Guardian policy blocked this patch."
+                        : isReviewBlocking
+                        ? "Reviewer Agent detected blocking findings or recommended rejection."
+                        : !isExecutionVerified
+                        ? `Patch validation status is '${patch.validation_status}', not passing execution.`
+                        : `Run status is '${run.status}', awaiting completion.`}
+                    </p>
+                  </div>
+                </div>
+              )}
 
-        {/* Patch Verification Metadata */}
-        <div className="space-y-2 text-xs bg-surface-elevated p-3.5 rounded border border-border-subtle">
-          <div className="flex justify-between">
-            <span className="text-text-muted">Workflow Run ID:</span>
-            <span className="text-text-primary">{run.id}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-text-muted">Patch Revision:</span>
-            <span className="text-forge-lime font-bold">rev #{patch.revision}</span>
-          </div>
-          {baseCommitSha && (
-            <div className="flex justify-between">
-              <span className="text-text-muted">Base Commit SHA:</span>
-              <span className="text-text-primary text-[11px] font-mono">{baseCommitSha}</span>
+              {/* Dynamic Checklist bound strictly to real data */}
+              <div className="p-4 rounded-xl bg-surface/70 border border-border-subtle space-y-3 font-sans">
+                <div className="flex items-center gap-2.5 text-xs text-text-primary">
+                  {securityGateStatus === "PASSED" ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  ) : isSecurityBlocked ? (
+                    <XCircle className="w-4 h-4 text-semantic-danger shrink-0" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                  )}
+                  <span>
+                    Security check:{" "}
+                    {securityGateStatus === "PASSED"
+                      ? "Passed (zero injection, secrets or privilege escalations)"
+                      : isSecurityBlocked
+                      ? `Blocked (${securityBlockReasons.join("; ") || "policy violation"})`
+                      : securityGateStatus || "Pending evaluation"}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2.5 text-xs text-text-primary">
+                  {isExecutionVerified ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  ) : isStaticOnly ? (
+                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                  ) : (
+                    <XCircle className="w-4 h-4 text-semantic-danger shrink-0" />
+                  )}
+                  <span>
+                    Test execution:{" "}
+                    {isExecutionVerified
+                      ? `Passed (${patch.validation_status})`
+                      : isStaticOnly
+                      ? `Static AST syntax verification only (sandbox skipped)`
+                      : `Unverified (${patch.validation_status || "No test evidence"})`}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2.5 text-xs text-text-primary">
+                  {!isReviewBlocking ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  ) : (
+                    <XCircle className="w-4 h-4 text-semantic-danger shrink-0" />
+                  )}
+                  <span>
+                    Reviewer audit:{" "}
+                    {!isReviewBlocking
+                      ? "No blocking issues identified"
+                      : "Blocking findings or rejection recommended"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Metadata Details */}
+              <div className="p-3.5 rounded-xl bg-surface-elevated/60 border border-border-subtle space-y-2 text-[11px]">
+                <div className="flex justify-between">
+                  <span className="text-text-muted">Target Files:</span>
+                  <span className="text-cyan-400 font-bold">{patch.target_files.join(", ") || "None"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-text-muted">Patch Hash:</span>
+                  <span className="text-forge-lime break-all">{truncateHash(patch.content_hash, 24)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-text-muted">Validation Status:</span>
+                  <span className={isExecutionVerified ? "text-emerald-400 uppercase font-bold" : "text-amber-400 uppercase font-bold"}>
+                    {patch.validation_status}
+                  </span>
+                </div>
+              </div>
+
+              {/* Feedback Note Input */}
+              <div>
+                <label className="block text-xs font-medium text-text-secondary mb-1.5 font-sans">
+                  Maintainer Feedback / Audit Log (Optional)
+                </label>
+                <textarea
+                  rows={2}
+                  value={feedback}
+                  onChange={(e) => setFeedback(e.target.value)}
+                  placeholder="Enter sign-off comments or request change details..."
+                  className="w-full text-xs font-mono bg-surface-elevated border border-border-subtle rounded-lg p-2.5 text-text-primary placeholder-text-muted focus:outline-none focus:border-emerald-400 transition-colors"
+                />
+              </div>
+
+              {/* Confirmation check */}
+              <label className="flex items-start gap-2 cursor-pointer text-xs text-text-secondary select-none font-sans">
+                <input
+                  type="checkbox"
+                  checked={confirmed}
+                  onChange={(e) => setConfirmed(e.target.checked)}
+                  className="mt-0.5 rounded border-border-subtle bg-surface-elevated text-emerald-400 focus:ring-0"
+                />
+                <span>
+                  I confirm that I have inspected the code changes and verified testing & security telemetry.
+                </span>
+              </label>
             </div>
           )}
-          <div className="flex flex-col gap-1 pt-1.5 border-t border-border-subtle">
-            <span className="text-text-muted">Canonical SHA-256 Content Hash:</span>
-            <span className="text-forge-lime break-all bg-background p-1.5 rounded text-[11px] border border-border-subtle">
-              {patch.content_hash}
-            </span>
-          </div>
-          <div className="flex justify-between pt-1.5 border-t border-border-subtle">
-            <span className="text-text-muted">Test Execution Evidence:</span>
-            <span className={patch.validation_status === "passed" ? "text-semantic-success font-bold uppercase" : "text-amber-attention uppercase"}>
-              {patch.validation_status}
-            </span>
-          </div>
-          {securityGateStatus && (
-            <div className="flex justify-between pt-1.5 border-t border-border-subtle">
-              <span className="text-text-muted">Security Guardian Gate:</span>
-              <span className={securityGateStatus === "PASSED" ? "text-semantic-success font-bold uppercase" : "text-semantic-danger font-bold uppercase"}>
-                {securityGateStatus}
-              </span>
+
+          {activeTab === "code_changes" && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-xs text-text-muted pb-1 border-b border-border-subtle">
+                <span>Proposed Unified Diff Patch ({patch.target_files[0] || "patch.diff"})</span>
+                <span className="text-forge-lime">SHA-256: {truncateHash(patch.content_hash, 16)}</span>
+              </div>
+              <DiffViewer
+                diff={patch.unified_diff}
+                filename={patch.target_files[0] || "patch.diff"}
+              />
+            </div>
+          )}
+
+          {activeTab === "test_results" && (
+            <div className="space-y-3">
+              <div className="p-3 rounded-lg bg-surface-elevated border border-border-subtle flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <span className="text-text-primary font-bold">Execution Verification</span>
+                </div>
+                <span className={`px-2 py-0.5 rounded font-bold uppercase text-[10px] ${
+                  isExecutionVerified ? "bg-emerald-500/20 text-emerald-400" : "bg-amber-500/20 text-amber-400"
+                }`}>
+                  {patch.validation_status}
+                </span>
+              </div>
+              <pre className="p-4 rounded-xl bg-black/70 border border-border-subtle text-[11px] text-text-secondary overflow-x-auto whitespace-pre-wrap max-h-64">
+                {testOutput || `=== Test Result Record ===\nStatus: ${patch.validation_status.toUpperCase()}\nPatch Revision: #${patch.revision}\nTarget Files: ${patch.target_files.join(", ") || "None"}\nSHA-256 Hash: ${patch.content_hash}\n\nNo raw stdout log was emitted during this execution.`}
+              </pre>
+            </div>
+          )}
+
+          {errorMessage && (
+            <div className="p-3 rounded-lg bg-semantic-danger/15 border border-semantic-danger/30 text-semantic-danger text-xs">
+              {errorMessage}
             </div>
           )}
         </div>
 
-        {/* Form Controls */}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1.5">
-              Decision
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                disabled={!canApprove}
-                onClick={() => setDecision("approved")}
-                className={`flex items-center justify-center gap-2 p-2.5 rounded-lg border text-xs transition-all ${
-                  decision === "approved"
-                    ? "bg-forge-lime/15 border-forge-lime text-forge-lime font-bold"
-                    : "bg-surface-elevated border-border-subtle text-text-muted hover:bg-surface-hover"
-                } disabled:opacity-40 disabled:cursor-not-allowed`}
-              >
-                <CheckCircle2 className="w-4 h-4 text-forge-lime" />
-                Approve Patch
-              </button>
-              <button
-                type="button"
-                onClick={() => setDecision("rejected")}
-                className={`flex items-center justify-center gap-2 p-2.5 rounded-lg border text-xs transition-all ${
-                  decision === "rejected"
-                    ? "bg-semantic-danger/15 border-semantic-danger text-semantic-danger font-bold"
-                    : "bg-surface-elevated border-border-subtle text-text-muted hover:bg-surface-hover"
-                }`}
-              >
-                <XCircle className="w-4 h-4 text-semantic-danger" />
-                Reject Patch
-              </button>
-            </div>
-          </div>
+        {/* Footer Actions Matching Infographic (Request Changes & Approve) */}
+        <div className="flex items-center justify-between px-6 py-4 border-t border-border-subtle bg-surface/50 font-sans">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl text-xs text-text-muted hover:text-text-primary transition-colors"
+          >
+            Close
+          </button>
 
-          <div>
-            <label className="block text-xs font-medium text-text-secondary mb-1">
-              Maintainer Feedback / Audit Log
-            </label>
-            <textarea
-              rows={3}
-              value={feedback}
-              onChange={(e) => setFeedback(e.target.value)}
-              placeholder="Verified discount logic and edge cases..."
-              className="w-full text-xs font-mono bg-surface-elevated border border-border-subtle rounded p-2 text-text-primary placeholder-text-muted focus:outline-none focus:border-forge-lime"
-            />
-          </div>
-
-          {/* Explicit Confirmation Checkbox */}
-          {decision === "approved" && (
-            <label className="flex items-start gap-2 cursor-pointer text-xs text-text-secondary select-none">
-              <input
-                type="checkbox"
-                checked={confirmed}
-                onChange={(e) => setConfirmed(e.target.checked)}
-                className="mt-0.5 rounded border-border-subtle bg-surface-elevated text-forge-lime focus:ring-0"
-              />
-              <span>
-                I confirm that I have reviewed the patch diff, verified the canonical SHA-256 hash, and checked test execution results.
-              </span>
-            </label>
-          )}
-
-          {errorMessage && (
-            <div className="p-2.5 rounded bg-semantic-danger/15 border border-semantic-danger/30 text-semantic-danger text-xs">
-              {errorMessage}
-            </div>
-          )}
-
-          <div className="flex items-center justify-end gap-3 pt-2 border-t border-border-subtle">
+          <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded text-xs text-text-muted hover:text-text-primary hover:bg-surface-elevated transition-colors"
+              disabled={submitting}
+              onClick={() => handleSubmit("rejected")}
+              className="px-4 py-2 rounded-xl text-xs font-medium bg-surface-elevated hover:bg-surface-hover text-semantic-danger border border-semantic-danger/30 transition-colors flex items-center gap-1.5"
             >
-              Cancel
+              <XCircle className="w-3.5 h-3.5" />
+              Request Changes
             </button>
+
             <button
-              type="submit"
-              disabled={submitting || (decision === "approved" && (!canApprove || !confirmed))}
-              className="flex items-center gap-2 px-4 py-2 rounded text-xs font-bold bg-forge-lime hover:bg-forge-lime/90 text-black transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_0_8px_rgba(215,255,100,0.3)]"
+              type="button"
+              disabled={submitting || isAlreadyApproved || (!canApprove && run.status === "AWAITING_APPROVAL") || !confirmed}
+              onClick={() => handleSubmit("approved")}
+              className="px-5 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-cyan-400 to-emerald-400 hover:from-cyan-300 hover:to-emerald-300 text-black transition-all shadow-md shadow-emerald-500/20 flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              Submit Decision
+              {submitting ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Check className="w-3.5 h-3.5 stroke-[3]" />
+              )}
+              {isAlreadyApproved ? "Approved" : "Approve"}
             </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );

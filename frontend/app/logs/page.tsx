@@ -87,24 +87,24 @@ export default function ActivityStreamPage() {
     <div className="flex-1 flex flex-col min-w-0 bg-background">
       <Navbar onRefresh={loadLogs} title="Activity Stream" subtitle="Sanitized Agent Telemetry & Event Audit Log" />
 
-      <main className="p-6 max-w-7xl w-full mx-auto space-y-6">
+      <main className="p-6 max-w-7xl w-full mx-auto space-y-6 font-sans">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-border-subtle pb-4">
           <div>
-            <h2 className="text-sm font-mono font-bold text-text-primary uppercase tracking-wider flex items-center gap-2">
-              <Radio className="w-4 h-4 text-forge-lime animate-pulse" />
+            <h2 className="text-base sm:text-lg font-bold text-text-primary tracking-tight flex items-center gap-2">
+              <Radio className="w-5 h-5 text-cyan-400 animate-pulse" />
               Live Sanitized Event Stream
             </h2>
-            <p className="text-xs text-text-muted font-mono mt-0.5">
-              Secret scrubbing active: API keys, tokens, and authorization headers are redacted before emission.
+            <p className="text-xs sm:text-sm text-text-secondary mt-0.5">
+              Secret scrubbing active: API keys, tokens, and authorization headers are cryptographically redacted before emission.
             </p>
           </div>
 
           <div className="flex items-center gap-2">
-            <Filter className="w-3.5 h-3.5 text-text-muted" />
+            <Filter className="w-4 h-4 text-text-muted" />
             <select
               value={selectedAgent}
               onChange={(e) => setSelectedAgent(e.target.value)}
-              className="text-xs font-mono bg-surface border border-border-subtle rounded px-2.5 py-1.5 text-text-primary focus:outline-none focus:border-forge-lime"
+              className="text-xs sm:text-sm bg-surface-elevated border border-border-subtle rounded-xl px-3 py-2 text-text-primary focus:outline-none focus:border-cyan-400"
             >
               <option value="ALL">All Agents &amp; Gates</option>
               <option value="context_ranker">Context Ranker</option>

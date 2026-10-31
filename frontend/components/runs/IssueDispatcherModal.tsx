@@ -18,6 +18,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { api, ApiError } from "@/lib/api/client";
+import { getStoredGitHubToken } from "@/lib/auth/githubSession";
 import { Issue, Repository, GitHubRemoteIssue } from "@/types";
 import { truncateHash } from "@/lib/utils";
 
@@ -262,8 +263,14 @@ export function IssueDispatcherModal({
       // Step 1: Create workflow run in QUEUED state
       const run = await api.createRun(selectedRepoId, targetIssueId);
 
-      // Step 2: Start multi-agent execution in background
-      await api.startRun(run.id, { background: true });
+      // Step 2: Pass user's connected GitHub PAT in run metadata so agent pipeline has live access
+      const userGhToken = getStoredGitHubToken() || undefined;
+      await api.startRun(run.id, {
+        background: true,
+        metadata: {
+          github_token: userGhToken,
+        },
+      });
 
       // Step 3: Close modal and navigate directly to live execution telemetry
       onClose();

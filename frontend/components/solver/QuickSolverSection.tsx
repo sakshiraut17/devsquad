@@ -7,6 +7,7 @@ import {
   Sparkles,
   Search,
   CheckCircle2,
+  AlertCircle,
   AlertTriangle,
   FileCode,
   Copy,
@@ -64,6 +65,53 @@ export function QuickSolverSection({
   const [prSuccessUrl, setPrSuccessUrl] = useState<string | null>(null);
   const [prNumber, setPrNumber] = useState<number | null>(null);
   const [prError, setPrError] = useState<string | null>(null);
+
+  const [committingDirect, setCommittingDirect] = useState(false);
+  const [directSuccessUrl, setDirectSuccessUrl] = useState<string | null>(null);
+  const [directError, setDirectError] = useState<string | null>(null);
+
+  const handleCommitDirectToMain = async () => {
+    if (!result) return;
+    setCommittingDirect(true);
+    setDirectError(null);
+    setDirectSuccessUrl(null);
+
+    let token = getStoredGitHubToken() || undefined;
+    if (!token) {
+      const promptToken = window.prompt(
+        "To commit directly to the repository default branch, please enter your GitHub Personal Access Token (with 'repo' scope):"
+      );
+      if (!promptToken || !promptToken.trim()) {
+        setDirectError("A GitHub Personal Access Token with 'repo' scope is required to commit code.");
+        setCommittingDirect(false);
+        return;
+      }
+      token = promptToken.trim();
+      localStorage.setItem("devsquad_github_token", token);
+      window.dispatchEvent(new Event("devsquad_github_session_change"));
+    }
+
+    try {
+      const res = await api.createPullRequest({
+        target: result.repository_name || targetUrl,
+        issue_number: result.issue_number || null,
+        issue_title: result.issue_title,
+        diagnosis: result.problem_diagnosis,
+        root_cause: result.root_cause,
+        code_patch: result.code_patch,
+        verification_steps: result.verification_steps,
+        commit_direct: true,
+        token,
+      });
+      setDirectSuccessUrl(res.html_url || `https://github.com/${result.repository_name}`);
+    } catch (err: any) {
+      setDirectError(
+        err?.message || "Failed to commit code to repository. Verify your token has 'repo' write scope."
+      );
+    } finally {
+      setCommittingDirect(false);
+    }
+  };
 
   const handleCreatePullRequest = async () => {
     if (!result || !result.code_patch) return;
@@ -166,45 +214,6 @@ export function QuickSolverSection({
     "Formulating root cause diagnosis & code solution...",
   ];
 
-  const PRESETS = [
-    {
-      label: "Express.js #5380",
-      category: "Node.js",
-      url: "https://github.com/expressjs/express/issues/5380",
-      description: "Async route rejection error propagation",
-    },
-    {
-      label: "Pallets / Click Bug #3840",
-      category: "Python CLI",
-      url: "https://github.com/pallets/click/issues/3840",
-      description: "Windows WinError 14001 process crash",
-    },
-    {
-      label: "Facebook / React #28100",
-      category: "Frontend",
-      url: "https://github.com/facebook/react/issues/28100",
-      description: "SSR hydration mismatch edgecase",
-    },
-    {
-      label: "Astral-sh / UV #120",
-      category: "Rust / Packaging",
-      url: "https://github.com/astral-sh/uv",
-      description: "Dependency lockfile resolution",
-    },
-    {
-      label: "cyber-rps-arena #1",
-      category: "Your Repo",
-      url: "ayushkale06/cyber-rps-arena#1",
-      description: "Round scoring draw state fix",
-    },
-    {
-      label: "AlphaTrader #1",
-      category: "Your Repo",
-      url: "ayushkale06/AlphaTrader#1",
-      description: "Volatility division by zero guard",
-    },
-  ];
-
   async function handleQuickSolve(overrideTarget?: string) {
     const input = (overrideTarget || targetUrl).trim();
     if (!input) {
@@ -305,133 +314,202 @@ export function QuickSolverSection({
         className="absolute -bottom-32 -left-32 w-[420px] h-[420px] bg-gradient-to-tr from-purple-500/20 via-cyan-500/10 to-transparent rounded-full blur-[100px] pointer-events-none"
       />
 
-      {/* Header Banner */}
-      <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-2">
-            <motion.div
-              animate={{ rotate: [0, 15, -15, 0], scale: [1, 1.1, 1] }}
-              transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
-              className="p-1.5 rounded-xl bg-gradient-to-br from-cyan-400/20 to-emerald-400/20 border border-cyan-400/30 text-cyan-400 shadow-sm"
-            >
-              <Zap className="w-4 h-4" />
-            </motion.div>
-            <span className="text-xs font-mono font-bold uppercase tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-emerald-400 to-lime-300">
-              Autonomous Real-Time Inspector &amp; Quick Solver
-            </span>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-              Live Engine
-            </span>
-          </div>
-          <h2 className="text-2xl lg:text-3xl font-extrabold text-text-primary tracking-tight">
-            Inspect Any Codebase &amp; Resolve Issues Instantly
-          </h2>
-          <p className="text-xs lg:text-sm text-text-secondary mt-1.5 max-w-2xl leading-relaxed">
-            Paste a link to <strong className="text-cyan-300">any GitHub repository or issue</strong>.
-            DevSquad automatically ingests the code structure, isolates the defect, and generates a concrete patch.
-          </p>
-        </div>
-
-        {/* Interactive Preset Chips */}
-        <div className="flex flex-col gap-1.5 shrink-0">
-          <span className="text-[11px] font-mono text-text-muted flex items-center gap-1">
-            <Sparkles className="w-3 h-3 text-cyan-400" />
-            Try One-Click Benchmarks:
-          </span>
-          <div className="flex flex-wrap gap-1.5">
-            {PRESETS.map((p) => (
-              <motion.button
-                key={p.label}
-                whileHover={{ scale: 1.04, y: -1 }}
-                whileTap={{ scale: 0.96 }}
-                onClick={() => {
-                  setTargetUrl(p.url);
-                  handleQuickSolve(p.url);
-                }}
-                className="px-2.5 py-1 rounded-lg bg-surface-elevated/80 border border-border-subtle hover:border-cyan-400/40 text-text-secondary hover:text-cyan-300 text-[11px] font-mono transition-all flex items-center gap-1.5 shadow-sm"
+      {/* 2-Column Hero & Live Telemetry Layout */}
+      <div className="relative grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* Left Column: Hero Copy + Hero Input + Benchmarks (7/12 cols) */}
+        <div className="lg:col-span-7 space-y-5">
+          <div>
+            <div className="flex items-center gap-2 mb-2.5">
+              <motion.div
+                animate={{ rotate: [0, 15, -15, 0], scale: [1, 1.1, 1] }}
+                transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
+                className="p-1.5 rounded-xl bg-gradient-to-br from-cyan-400/20 to-emerald-400/20 border border-cyan-400/30 text-cyan-400 shadow-sm"
               >
-                <Bug className="w-3 h-3 text-cyan-400" />
-                <span>{p.label}</span>
-              </motion.button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Interactive Input Bar */}
-      <div className="relative space-y-3">
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1 group">
-            <div className="absolute left-4 top-3.5 text-text-muted group-focus-within:text-cyan-400 transition-colors pointer-events-none">
-              <Search className="w-4 h-4" />
+                <Zap className="w-4 h-4" />
+              </motion.div>
+              <span className="text-xs font-mono font-bold uppercase tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-emerald-400 to-lime-300">
+                Autonomous Multi-Agent Engineering
+              </span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 flex items-center gap-1 font-semibold">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                Live Engine
+              </span>
             </div>
-            <input
-              type="text"
-              placeholder="Paste any GitHub URL (e.g. https://github.com/owner/repo/issues/123 or owner/repo)"
-              value={targetUrl}
-              onChange={(e) => setTargetUrl(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !isSolving) handleQuickSolve();
-              }}
-              className="w-full pl-11 pr-4 py-3.5 text-xs sm:text-sm rounded-2xl bg-surface-elevated/70 border border-border-subtle focus:outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 text-text-primary placeholder:text-text-muted/60 font-mono shadow-inner transition-all"
-            />
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-text-primary tracking-tight font-sans">
+              Inspect Any Codebase &amp; Resolve Issues Instantly
+            </h2>
+            <p className="text-sm text-text-secondary mt-2 leading-relaxed font-sans max-w-xl">
+              Paste a link to <strong className="text-cyan-300">any GitHub repository or issue</strong>.
+              DevSquad's multi-agent team ingests repository AST, isolates the defect, and synthesizes minimal, test-verified patches.
+            </p>
           </div>
 
-          <motion.button
-            whileHover={{ scale: 1.02, y: -1 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => handleQuickSolve()}
-            disabled={isSolving || !targetUrl.trim()}
-            className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-cyan-400 via-emerald-400 to-lime-300 hover:from-cyan-300 hover:to-lime-200 text-black font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/20 disabled:opacity-50 disabled:pointer-events-none transition-all"
-          >
-            {isSolving ? (
-              <>
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-                >
-                  <Cpu className="w-4 h-4" />
-                </motion.div>
-                <span>Analyzing &amp; Solving...</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4" />
-                <span>Diagnose &amp; Solve</span>
-              </>
+          {/* Interactive Hero Input Bar */}
+          <div className="space-y-2.5">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1 group">
+                <div className="absolute left-4 top-4 text-text-muted group-focus-within:text-cyan-400 transition-colors pointer-events-none">
+                  <Search className="w-5 h-5" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Paste GitHub repository or issue URL (e.g. owner/repo)"
+                  value={targetUrl}
+                  onChange={(e) => setTargetUrl(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !isSolving) handleQuickSolve();
+                  }}
+                  className="w-full pl-12 pr-4 py-3.5 sm:py-4 text-sm sm:text-base rounded-2xl bg-surface-elevated/80 border border-border-subtle focus:outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30 focus:shadow-[0_0_25px_rgba(56,189,248,0.2)] text-text-primary placeholder:text-text-muted/60 font-mono shadow-inner transition-all"
+                />
+              </div>
+
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => handleQuickSolve()}
+                disabled={isSolving || !targetUrl.trim()}
+                className="px-7 py-3.5 sm:py-4 rounded-2xl bg-gradient-to-r from-cyan-400 via-teal-300 to-emerald-400 hover:from-cyan-300 hover:to-emerald-300 text-black font-extrabold text-sm sm:text-base flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/25 disabled:opacity-50 disabled:pointer-events-none transition-all shrink-0"
+              >
+                {isSolving ? (
+                  <>
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+                    >
+                      <Cpu className="w-5 h-5" />
+                    </motion.div>
+                    <span>Solving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-5 h-5" />
+                    <span>Diagnose &amp; Solve</span>
+                  </>
+                )}
+              </motion.button>
+            </div>
+
+            {/* Realtime URL Validation Indicator */}
+            <div className="flex items-center justify-between text-xs px-1 font-sans">
+              <div>
+                {targetUrl.trim() && (
+                  (() => {
+                    const trimmed = targetUrl.trim();
+                    const isValid =
+                      trimmed.startsWith("https://github.com/") ||
+                      trimmed.startsWith("http://github.com/") ||
+                      /^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+(#\d+)?$/.test(trimmed);
+
+                    return isValid ? (
+                      <span className="text-emerald-400 flex items-center gap-1.5 font-medium">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        Valid GitHub repository target detected
+                      </span>
+                    ) : (
+                      <span className="text-amber-400 flex items-center gap-1.5 font-medium">
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                        Format: owner/repo or https://github.com/owner/repo
+                      </span>
+                    );
+                  })()
+                )}
+                {!targetUrl.trim() && (
+                  <span className="text-text-muted">
+                    Accepts any public or private repository URL with token
+                  </span>
+                )}
+              </div>
+
+              <button
+                onClick={() => setCustomProblem(customProblem ? "" : "Optional details")}
+                className="text-cyan-400 hover:text-cyan-300 hover:underline transition-colors flex items-center gap-1 font-mono text-[11px]"
+              >
+                <CornerDownRight className="w-3 h-3" />
+                {customProblem ? "Hide details" : "Add custom stack trace / reproduction steps"}
+              </button>
+            </div>
+
+            {customProblem !== "" && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden pt-1"
+              >
+                <textarea
+                  rows={3}
+                  placeholder="Provide extra error trace, reproduction steps, or context (optional)..."
+                  value={customProblem === "Optional details" ? "" : customProblem}
+                  onChange={(e) => setCustomProblem(e.target.value)}
+                  className="w-full p-3.5 text-xs rounded-2xl bg-surface-elevated/70 border border-border-subtle focus:outline-none focus:border-cyan-400 text-text-primary font-mono shadow-inner"
+                />
+              </motion.div>
             )}
-          </motion.button>
+          </div>
         </div>
 
-        {/* Toggle Custom Problem / Extra Context */}
-        <div className="flex items-center justify-between text-[11px] font-mono text-text-muted px-1">
-          <span>Accepts any public or private repository URL with token</span>
-          <button
-            onClick={() => setCustomProblem(customProblem ? "" : "Optional details")}
-            className="text-cyan-400 hover:text-cyan-300 hover:underline transition-colors flex items-center gap-1"
-          >
-            <CornerDownRight className="w-3 h-3" />
-            {customProblem ? "Hide custom problem description" : "Add custom stack trace / reproduction instructions"}
-          </button>
-        </div>
+        {/* Right Column: Live Pipeline Architecture Preview & Terminal (5/12 cols) */}
+        <div className="lg:col-span-5">
+          <div className="p-5 rounded-2xl bg-[#06080E] border border-border-subtle shadow-xl space-y-3 font-mono text-xs">
+            {/* Terminal Window Header */}
+            <div className="flex items-center justify-between border-b border-border-subtle pb-3">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-rose-500/80" />
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
+                <span className="text-text-muted text-[11px] ml-1.5 font-mono">devsquad-kernel ~ pipeline</span>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 font-semibold border border-cyan-500/20">
+                LangGraph 2.0
+              </span>
+            </div>
 
-        {customProblem !== "" && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden"
-          >
-            <textarea
-              rows={3}
-              placeholder="Provide extra error trace, reproduction steps, or context (optional)..."
-              value={customProblem === "Optional details" ? "" : customProblem}
-              onChange={(e) => setCustomProblem(e.target.value)}
-              className="w-full p-3.5 text-xs rounded-2xl bg-surface-elevated/70 border border-border-subtle focus:outline-none focus:border-cyan-400 text-text-primary font-mono shadow-inner"
-            />
-          </motion.div>
-        )}
+            {/* Pipeline Stage Sequence Preview */}
+            <div className="space-y-1.5 text-[11px]">
+              <div className="flex items-center justify-between text-text-muted">
+                <span>[01] Context Ranker</span>
+                <span className="text-sky-400 font-semibold">AST Ingest Ready</span>
+              </div>
+              <div className="flex items-center justify-between text-text-muted">
+                <span>[02] Planner Agent</span>
+                <span className="text-emerald-400 font-semibold">Root Cause Formulated</span>
+              </div>
+              <div className="flex items-center justify-between text-text-muted">
+                <span>[03] Coder Agent</span>
+                <span className="text-purple-400 font-semibold">Minimal Unified Diff</span>
+              </div>
+              <div className="flex items-center justify-between text-text-muted">
+                <span>[04] Security Guardian</span>
+                <span className="text-rose-400 font-semibold">Fail-Closed Invariants</span>
+              </div>
+              <div className="flex items-center justify-between text-text-muted">
+                <span>[05] Tester Agent</span>
+                <span className="text-amber-400 font-semibold">Docker Sandbox (Exit 0)</span>
+              </div>
+              <div className="flex items-center justify-between text-text-muted">
+                <span>[06] Reviewer Agent</span>
+                <span className="text-cyan-400 font-semibold">Multi-Angle Review</span>
+              </div>
+            </div>
+
+            {/* Live Patch Diff Preview Snippet */}
+            <div className="p-2.5 rounded-xl bg-surface/90 border border-border-subtle text-[11px] space-y-0.5 overflow-hidden">
+              <div className="text-text-muted">@@ -4,3 +4,5 @@ calculate_average(nums):</div>
+              <div className="text-rose-400 bg-rose-500/10 px-1 rounded">- return total / len(numbers)</div>
+              <div className="text-emerald-400 bg-emerald-500/10 px-1 rounded">+ if not numbers: return 0.0</div>
+              <div className="text-emerald-400 bg-emerald-500/10 px-1 rounded">+ return total / len(numbers)</div>
+            </div>
+
+            {/* Subsystem Telemetry Status */}
+            <div className="pt-1 flex items-center justify-between text-[10px] text-text-muted">
+              <span className="flex items-center gap-1.5 text-emerald-400 font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Container Sandbox: Isolated
+              </span>
+              <span className="font-mono">Verification: Strict Exit 0</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Animated Solving Progress State */}
@@ -557,8 +635,68 @@ export function QuickSolverSection({
                     <span>Dispatch Multi-Agent Squad</span>
                   </motion.button>
                 )}
+                {result.severity === "clean" ? (
+                  <div className="px-4 py-2 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-mono font-semibold text-xs flex items-center gap-2 shadow-sm">
+                    <ShieldCheck className="w-4 h-4 text-cyan-400" />
+                    <span>Codebase Clean — No Fix Needed</span>
+                  </div>
+                ) : (
+                  <motion.button
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.97 }}
+                    disabled={committingDirect || creatingPR || publishingToGitHub}
+                    onClick={handleCommitDirectToMain}
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-black font-mono font-bold text-xs flex items-center gap-2 shadow-md transition-all disabled:opacity-50"
+                    title="Apply and commit this fix directly to the default branch (main) on GitHub"
+                  >
+                    {committingDirect ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin text-black" />
+                        <span>Committing to main...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-black stroke-[3]" />
+                        <span>Commit Fix to main</span>
+                      </>
+                    )}
+                  </motion.button>
+                )}
               </div>
             </div>
+
+            {directSuccessUrl && (
+              <motion.div
+                initial={{ opacity: 0, y: -5 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mx-6 mb-3 p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-xs font-mono text-emerald-200 flex items-center justify-between shadow-sm"
+              >
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>Code fix successfully committed directly to main branch on GitHub!</span>
+                </div>
+                <a
+                  href={directSuccessUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-3 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold flex items-center gap-1 transition-colors"
+                >
+                  <span>View Edited Code on GitHub</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </motion.div>
+            )}
+
+            {directError && (
+              <motion.div
+                initial={{ opacity: 0, y: -5 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mx-6 mb-3 p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-xs font-mono text-rose-300 flex items-start gap-2 shadow-sm"
+              >
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <span>{directError}</span>
+              </motion.div>
+            )}
 
             {/* Diagnosis & Root Cause */}
             <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4 border-b border-border-subtle bg-surface-elevated/40">
@@ -580,8 +718,68 @@ export function QuickSolverSection({
                 <p className="text-xs text-emerald-300 font-mono leading-relaxed bg-emerald-950/20 p-3 rounded-xl border border-emerald-500/20">
                   {result.root_cause}
                 </p>
+                {result.severity === "clean" ? (
+                  <div className="px-4 py-2 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-mono font-semibold text-xs flex items-center gap-2 shadow-sm">
+                    <ShieldCheck className="w-4 h-4 text-cyan-400" />
+                    <span>Codebase Clean — No Fix Needed</span>
+                  </div>
+                ) : (
+                  <motion.button
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.97 }}
+                    disabled={committingDirect || creatingPR || publishingToGitHub}
+                    onClick={handleCommitDirectToMain}
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-black font-mono font-bold text-xs flex items-center gap-2 shadow-md transition-all disabled:opacity-50"
+                    title="Apply and commit this fix directly to the default branch (main) on GitHub"
+                  >
+                    {committingDirect ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin text-black" />
+                        <span>Committing to main...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-black stroke-[3]" />
+                        <span>Commit Fix to main</span>
+                      </>
+                    )}
+                  </motion.button>
+                )}
               </div>
             </div>
+
+            {directSuccessUrl && (
+              <motion.div
+                initial={{ opacity: 0, y: -5 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mx-6 mb-3 p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-xs font-mono text-emerald-200 flex items-center justify-between shadow-sm"
+              >
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>Code fix successfully committed directly to main branch on GitHub!</span>
+                </div>
+                <a
+                  href={directSuccessUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-3 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold flex items-center gap-1 transition-colors"
+                >
+                  <span>View Edited Code on GitHub</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </motion.div>
+            )}
+
+            {directError && (
+              <motion.div
+                initial={{ opacity: 0, y: -5 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mx-6 mb-3 p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-xs font-mono text-rose-300 flex items-start gap-2 shadow-sm"
+              >
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <span>{directError}</span>
+              </motion.div>
+            )}
 
             {/* Affected Files Chips */}
             {result.affected_files && result.affected_files.length > 0 && (
@@ -672,8 +870,68 @@ export function QuickSolverSection({
                     </>
                   )}
                 </motion.button>
+                {result.severity === "clean" ? (
+                  <div className="px-4 py-2 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-mono font-semibold text-xs flex items-center gap-2 shadow-sm">
+                    <ShieldCheck className="w-4 h-4 text-cyan-400" />
+                    <span>Codebase Clean — No Fix Needed</span>
+                  </div>
+                ) : (
+                  <motion.button
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.97 }}
+                    disabled={committingDirect || creatingPR || publishingToGitHub}
+                    onClick={handleCommitDirectToMain}
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-black font-mono font-bold text-xs flex items-center gap-2 shadow-md transition-all disabled:opacity-50"
+                    title="Apply and commit this fix directly to the default branch (main) on GitHub"
+                  >
+                    {committingDirect ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin text-black" />
+                        <span>Committing to main...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-black stroke-[3]" />
+                        <span>Commit Fix to main</span>
+                      </>
+                    )}
+                  </motion.button>
+                )}
               </div>
             </div>
+
+            {directSuccessUrl && (
+              <motion.div
+                initial={{ opacity: 0, y: -5 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mx-6 mb-3 p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-xs font-mono text-emerald-200 flex items-center justify-between shadow-sm"
+              >
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>Code fix successfully committed directly to main branch on GitHub!</span>
+                </div>
+                <a
+                  href={directSuccessUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-3 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold flex items-center gap-1 transition-colors"
+                >
+                  <span>View Edited Code on GitHub</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </motion.div>
+            )}
+
+            {directError && (
+              <motion.div
+                initial={{ opacity: 0, y: -5 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mx-6 mb-3 p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-xs font-mono text-rose-300 flex items-start gap-2 shadow-sm"
+              >
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <span>{directError}</span>
+              </motion.div>
+            )}
 
             {prSuccessUrl && (
               <motion.div
@@ -851,8 +1109,68 @@ export function QuickSolverSection({
                     </>
                   )}
                 </motion.button>
+                {result.severity === "clean" ? (
+                  <div className="px-4 py-2 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-mono font-semibold text-xs flex items-center gap-2 shadow-sm">
+                    <ShieldCheck className="w-4 h-4 text-cyan-400" />
+                    <span>Codebase Clean — No Fix Needed</span>
+                  </div>
+                ) : (
+                  <motion.button
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.97 }}
+                    disabled={committingDirect || creatingPR || publishingToGitHub}
+                    onClick={handleCommitDirectToMain}
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-black font-mono font-bold text-xs flex items-center gap-2 shadow-md transition-all disabled:opacity-50"
+                    title="Apply and commit this fix directly to the default branch (main) on GitHub"
+                  >
+                    {committingDirect ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin text-black" />
+                        <span>Committing to main...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-black stroke-[3]" />
+                        <span>Commit Fix to main</span>
+                      </>
+                    )}
+                  </motion.button>
+                )}
               </div>
             </div>
+
+            {directSuccessUrl && (
+              <motion.div
+                initial={{ opacity: 0, y: -5 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mx-6 mb-3 p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-xs font-mono text-emerald-200 flex items-center justify-between shadow-sm"
+              >
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>Code fix successfully committed directly to main branch on GitHub!</span>
+                </div>
+                <a
+                  href={directSuccessUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-3 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold flex items-center gap-1 transition-colors"
+                >
+                  <span>View Edited Code on GitHub</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </motion.div>
+            )}
+
+            {directError && (
+              <motion.div
+                initial={{ opacity: 0, y: -5 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mx-6 mb-3 p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-xs font-mono text-rose-300 flex items-start gap-2 shadow-sm"
+              >
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <span>{directError}</span>
+              </motion.div>
+            )}
 
             {/* Interactive Tab Contents */}
             <div className="p-6 bg-[#06080E] font-mono text-xs overflow-x-auto max-h-[450px]">

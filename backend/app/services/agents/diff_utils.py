@@ -111,6 +111,12 @@ def apply_unified_diff(original_text: str, diff_text: str) -> str:
             new_start = int(match.group(3))
             new_len = int(match.group(4)) if match.group(4) is not None else 1
             current_header = (old_start, old_len, new_start, new_len)
+        elif line.startswith("@@"):
+            # Handles loose LLM hunk headers like "@@" or "@@ @@"
+            if current_header and current_hunk_lines:
+                hunks.append((*current_header, current_hunk_lines))
+                current_hunk_lines = []
+            current_header = (1, 1, 1, 1)
         elif current_header is not None:
             # Diff content lines
             if line.startswith(("+", "-", " ", "\\")):
@@ -155,11 +161,32 @@ def apply_unified_diff(original_text: str, diff_text: str) -> str:
         expected_normalized = [l.rstrip("\r\n") for l in hunk_old]
 
         if actual_normalized != expected_normalized:
-            raise PatchHunkMismatchError(
-                f"Patch hunk at line {old_start} failed to apply: expected {len(expected_normalized)} lines "
-                f"but found mismatch in target content.\n"
-                f"Expected: {expected_normalized[:3]}\nActual: {actual_normalized[:3]}"
-            )
+            # Resilient context locator: search +/- 35 lines or full file for exact matching context
+            found_idx = None
+            search_min = max(0, idx - 35)
+            search_max = min(len(result_lines) - len(hunk_old) + 1, idx + 35)
+            for cand in range(search_min, search_max):
+                cand_slice = [l.rstrip("\r\n") for l in result_lines[cand : cand + len(hunk_old)]]
+                if cand_slice == expected_normalized:
+                    found_idx = cand
+                    break
+
+            # If not in immediate window, search entire file
+            if found_idx is None and len(hunk_old) > 0:
+                for cand in range(0, max(1, len(result_lines) - len(hunk_old) + 1)):
+                    cand_slice = [l.rstrip("\r\n") for l in result_lines[cand : cand + len(hunk_old)]]
+                    if cand_slice == expected_normalized:
+                        found_idx = cand
+                        break
+
+            if found_idx is not None:
+                idx = found_idx
+            else:
+                raise PatchHunkMismatchError(
+                    f"Patch hunk at line {old_start} failed to apply: expected {len(expected_normalized)} lines "
+                    f"but found mismatch in target content.\n"
+                    f"Expected: {expected_normalized[:3]}\nActual: {actual_normalized[:3]}"
+                )
 
         # Replace slice in result_lines
         result_lines[idx : idx + len(hunk_old)] = hunk_new

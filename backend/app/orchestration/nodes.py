@@ -1,5 +1,6 @@
 """LangGraph workflow node implementations executing agent services and database updates."""
 
+import asyncio
 from datetime import datetime, timezone
 import logging
 from typing import Any, Callable, Dict, List, Optional
@@ -64,13 +65,15 @@ class NodeDependencies:
         security_guardian: Optional[SecurityGuardianService] = None,
     ):
         self.session_factory = session_factory or async_session_factory
-        self.llm_provider = llm_provider or (get_llm_provider() if settings.gemini_api_key.get_secret_value() or settings.openai_api_key.get_secret_value() else None)
+        # If API keys are configured, use real provider; otherwise fall back to SyntheticLLMProvider so workflow can execute and display all 4 agents
+        self.llm_provider = llm_provider or get_llm_provider(allow_synthetic=True)
         self.github_service = github_service or GitHubService(token=settings.github_token.get_secret_value() or None)
-        self.planner_agent = planner_agent or (PlannerAgent(self.llm_provider) if self.llm_provider else None)
-        self.coder_agent = coder_agent or (CoderAgent(self.llm_provider) if self.llm_provider else None)
+        self.planner_agent = planner_agent or PlannerAgent(self.llm_provider)
+        self.coder_agent = coder_agent or CoderAgent(self.llm_provider)
         self.tester_agent = tester_agent or SandboxTesterAgent()
-        self.reviewer_agent = reviewer_agent or (ReviewerAgent(self.llm_provider) if self.llm_provider else None)
+        self.reviewer_agent = reviewer_agent or ReviewerAgent(self.llm_provider)
         self.security_guardian = security_guardian or SecurityGuardianService(session_factory=self.session_factory)
+
 
 
 # Default shared dependencies
@@ -171,6 +174,8 @@ async def context_preparation_node(state: DevSquadState) -> Dict[str, Any]:
     repo_id = state["repository_id"]
     issue_id = state["issue_id"]
     logger.info(f"[context_preparation_node] Preparing context for run {run_id}")
+    if settings.env != "test":
+        await asyncio.sleep(0.6)
 
     deps = get_default_deps()
 
@@ -264,30 +269,37 @@ async def context_preparation_node(state: DevSquadState) -> Dict[str, Any]:
     else:
         # Production pipeline: Live read-only GitHub retrieval
         logger.info(f"[context_preparation_node] Executing live GitHub context retrieval for {repo_full_name}#{issue_number}")
-        has_token = bool(settings.github_token.get_secret_value() or (deps.github_service and getattr(deps.github_service, "token", None)))
-
-        if not has_token and not (deps.github_service and deps.github_service.client.headers.get("Authorization")):
-            return {
-                "status": WorkflowStatus.FAILED.value,
-                "error_code": "GITHUB_CREDENTIALS_UNAVAILABLE",
-                "error_message": "GitHub API credentials are not configured (DEVSQUAD_GITHUB_TOKEN missing). Live repository context retrieval unavailable.",
-                "current_stage": WorkflowStage.FINALIZING.value,
-            }
+        
+        # Check token in state metadata (from user session), settings, or injected deps
+        user_gh_token = metadata.get("github_token") or settings.github_token.get_secret_value()
+        gh_svc = deps.github_service
+        if user_gh_token:
+            gh_svc = GitHubService(token=user_gh_token)
+        elif not gh_svc:
+            gh_svc = GitHubService(token=None)
 
         try:
-            gh_issue = await deps.github_service.get_issue(repo_owner, repo_name, issue_number)
-            issue_title = gh_issue.title
-            issue_body = gh_issue.body
-            issue_labels = gh_issue.labels
-            comments = await deps.github_service.get_issue_comments(repo_owner, repo_name, issue_number)
+            try:
+                gh_issue = await gh_svc.get_issue(repo_owner, repo_name, issue_number)
+                issue_title = gh_issue.title
+                issue_body = gh_issue.body
+                issue_labels = gh_issue.labels
+                comments = await gh_svc.get_issue_comments(repo_owner, repo_name, issue_number)
+            except Exception as issue_fetch_exc:
+                logger.warning(
+                    f"Remote GitHub issue #{issue_number} unavailable ({issue_fetch_exc}). "
+                    f"Continuing with database issue context: '{issue_title}'"
+                )
+                comments = []
+
             combined_text = f"{issue_title}\n{issue_body}\n" + "\n".join(comments)
 
-            repo_meta = await deps.github_service.get_repository(repo_owner, repo_name)
+            repo_meta = await gh_svc.get_repository(repo_owner, repo_name)
             default_branch = repo_meta.default_branch
-            branch_meta = await deps.github_service.get_branch(repo_owner, repo_name, default_branch)
+            branch_meta = await gh_svc.get_branch(repo_owner, repo_name, default_branch)
             base_commit_sha = branch_meta.commit_sha
 
-            tree_items = await deps.github_service.get_repository_tree(
+            tree_items = await gh_svc.get_repository_tree(
                 repo_owner, repo_name, tree_sha=base_commit_sha, recursive=True
             )
 
@@ -295,21 +307,21 @@ async def context_preparation_node(state: DevSquadState) -> Dict[str, Any]:
             return {
                 "status": WorkflowStatus.FAILED.value,
                 "error_code": "GITHUB_AUTH_FAILED",
-                "error_message": f"GitHub authentication error: {str(exc)}",
+                "error_message": f"GitHub authentication required for '{repo_full_name}': {str(exc)}. Please connect your GitHub Personal Access Token in the top navbar.",
                 "current_stage": WorkflowStage.FINALIZING.value,
             }
         except GitHubRateLimitError as exc:
             return {
                 "status": WorkflowStatus.FAILED.value,
                 "error_code": "GITHUB_RATE_LIMITED",
-                "error_message": f"GitHub API rate limit exceeded: {str(exc)}",
+                "error_message": f"GitHub API rate limit exceeded: {str(exc)}. Please connect your GitHub Personal Access Token in the top navbar to increase rate limits.",
                 "current_stage": WorkflowStage.FINALIZING.value,
             }
         except GitHubResourceNotFoundError as exc:
             return {
                 "status": WorkflowStatus.FAILED.value,
                 "error_code": "GITHUB_RESOURCE_NOT_FOUND",
-                "error_message": f"Repository '{repo_full_name}' or issue #{issue_number} not found on GitHub.",
+                "error_message": f"Repository '{repo_full_name}' not found on GitHub or private. Please connect your GitHub Personal Access Token in the top navbar.",
                 "current_stage": WorkflowStage.FINALIZING.value,
             }
         except Exception as exc:
@@ -353,7 +365,7 @@ async def context_preparation_node(state: DevSquadState) -> Dict[str, Any]:
 
         for item in to_fetch:
             try:
-                fc = await deps.github_service.get_file_content(
+                fc = await gh_svc.get_file_content(
                     repo_owner, repo_name, item.path, ref=base_commit_sha
                 )
                 if fc.is_binary:
@@ -436,6 +448,8 @@ async def planner_node(state: DevSquadState) -> Dict[str, Any]:
 
     run_id = state["run_id"]
     logger.info(f"[planner_node] Executing PlannerAgent for run {run_id}")
+    if settings.env != "test":
+        await asyncio.sleep(0.6)
     deps = get_default_deps()
 
     metadata = state.get("metadata", {})
@@ -550,6 +564,8 @@ async def coder_node(state: DevSquadState) -> Dict[str, Any]:
     repair_attempts = state.get("repair_attempts", 0)
     current_rev = state.get("patch_revision", 0) + 1
     logger.info(f"[coder_node] Executing CoderAgent for run {run_id} (rev {current_rev}, attempt {repair_attempts})")
+    if settings.env != "test":
+        await asyncio.sleep(0.6)
 
     deps = get_default_deps()
     plan_data = state.get("plan")
@@ -730,6 +746,8 @@ async def security_guardian_node(state: DevSquadState) -> Dict[str, Any]:
     base_commit_sha = metadata.get("base_commit_sha", patch_item.base_commit_sha)
 
     # Execute SecurityGuardianService
+    if settings.env != "test":
+        await asyncio.sleep(0.6)
     async with deps.session_factory() as session:
         scan_result = await deps.security_guardian.scan_patch(
             patch=patch_item,
@@ -897,6 +915,8 @@ async def reviewer_node(state: DevSquadState) -> Dict[str, Any]:
 
     run_id = state["run_id"]
     logger.info(f"[reviewer_node] Executing ReviewerAgent for run {run_id}")
+    if settings.env != "test":
+        await asyncio.sleep(0.6)
     deps = get_default_deps()
 
     plan_data = state.get("plan")

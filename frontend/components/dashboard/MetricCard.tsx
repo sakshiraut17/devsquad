@@ -9,6 +9,7 @@ interface MetricCardProps {
   value: number | string | null;
   icon: React.ComponentType<{ className?: string }>;
   sublabel?: string;
+  trend?: string;
   status?: "normal" | "warning" | "danger" | "success" | "lime";
   loading?: boolean;
 }
@@ -18,66 +19,75 @@ export function MetricCard({
   value,
   icon: Icon,
   sublabel,
+  trend,
   status = "normal",
   loading = false,
 }: MetricCardProps) {
-  let statusBorder = "border-border-subtle";
+  let statusBorder = "border-border-subtle hover:border-border-strong";
   let statusText = "text-text-primary";
-  let iconColor = "text-text-muted";
+  let iconBg = "bg-surface-elevated text-text-secondary";
   let glowEffect = "";
 
   if (status === "lime") {
-    statusBorder = "border-cyan-400/40";
-    statusText = "text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-emerald-400";
-    iconColor = "text-cyan-400";
-    glowEffect = "shadow-[0_0_15px_-3px_rgba(0,242,254,0.15)]";
+    statusBorder = "border-cyan-400/30 hover:border-cyan-400/60";
+    statusText = "text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-teal-300 to-emerald-400";
+    iconBg = "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20";
+    glowEffect = "shadow-[0_0_20px_-5px_rgba(56,189,248,0.2)]";
   } else if (status === "warning") {
-    statusBorder = "border-amber-attention/40";
-    statusText = "text-amber-300";
-    iconColor = "text-amber-300";
-    glowEffect = "shadow-[0_0_15px_-3px_rgba(255,180,84,0.15)]";
+    statusBorder = "border-amber-400/30 hover:border-amber-400/60";
+    statusText = "text-amber-400";
+    iconBg = "bg-amber-500/10 text-amber-400 border border-amber-500/20";
+    glowEffect = "shadow-[0_0_20px_-5px_rgba(245,158,11,0.2)]";
   } else if (status === "danger") {
-    statusBorder = "border-rose-500/40";
+    statusBorder = "border-rose-500/30 hover:border-rose-500/60";
     statusText = "text-rose-400";
-    iconColor = "text-rose-400";
-    glowEffect = "shadow-[0_0_15px_-3px_rgba(244,63,94,0.15)]";
+    iconBg = "bg-rose-500/10 text-rose-400 border border-rose-500/20";
+    glowEffect = "shadow-[0_0_20px_-5px_rgba(244,63,94,0.2)]";
   } else if (status === "success") {
-    statusBorder = "border-emerald-500/40";
+    statusBorder = "border-emerald-500/30 hover:border-emerald-500/60";
     statusText = "text-emerald-400";
-    iconColor = "text-emerald-400";
-    glowEffect = "shadow-[0_0_15px_-3px_rgba(16,185,129,0.15)]";
+    iconBg = "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+    glowEffect = "shadow-[0_0_20px_-5px_rgba(16,185,129,0.2)]";
   }
 
   return (
     <motion.div
-      whileHover={{ scale: 1.025, y: -2 }}
-      transition={{ duration: 0.2, ease: "easeOut" }}
+      whileHover={{ y: -3, transition: { duration: 0.18, ease: "easeOut" } }}
       className={cn(
-        "p-4 rounded-2xl bg-surface/90 backdrop-blur-xl border transition-all cursor-default relative overflow-hidden",
+        "p-5 rounded-2xl bg-surface/90 backdrop-blur-xl border transition-all cursor-default relative overflow-hidden flex flex-col justify-between shadow-sm",
         statusBorder,
         glowEffect
       )}
     >
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider font-mono">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-xs font-semibold text-text-secondary uppercase tracking-wider font-sans">
           {label}
         </span>
-        <div className="p-2 rounded-xl bg-surface-elevated border border-border-subtle">
-          <Icon className={cn("w-3.5 h-3.5", iconColor)} />
+        <div className={cn("p-2 rounded-xl transition-colors", iconBg)}>
+          <Icon className="w-4 h-4" />
         </div>
       </div>
 
-      <div className="text-2xl font-black font-mono tracking-tight">
-        {loading ? (
-          <div className="h-7 w-16 bg-surface-elevated animate-pulse rounded-lg" />
-        ) : (
-          <span className={statusText}>{value ?? "—"}</span>
-        )}
-      </div>
+      <div className="space-y-1">
+        <div className="text-3xl font-extrabold font-sans tracking-tight">
+          {loading ? (
+            <div className="h-8 w-24 bg-surface-elevated animate-pulse rounded-lg" />
+          ) : (
+            <span className={statusText}>{value ?? 0}</span>
+          )}
+        </div>
 
-      {sublabel && (
-        <div className="text-[11px] text-text-muted mt-1 font-mono">{sublabel}</div>
-      )}
+        <div className="flex items-center justify-between pt-1">
+          {sublabel && (
+            <span className="text-xs text-text-muted font-sans font-medium">{sublabel}</span>
+          )}
+          {trend && (
+            <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/20">
+              {trend}
+            </span>
+          )}
+        </div>
+      </div>
     </motion.div>
   );
 }

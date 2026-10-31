@@ -140,3 +140,52 @@ class OpenAIProvider(LLMProvider):
             provider="openai",
             usage=usage,
         )
+
+    async def generate_text(
+        self,
+        prompt: str,
+        system_instruction: str = "",
+        temperature: float = 0.2,
+    ) -> str:
+        """Call OpenAI/Groq chat completion for free-form text and code generation."""
+        full_system_prompt = (
+            f"{SYSTEM_SECURITY_POLICY}\n\n{system_instruction}".strip()
+            if system_instruction
+            else SYSTEM_SECURITY_POLICY
+        )
+        messages = [
+            {"role": "system", "content": full_system_prompt},
+            {"role": "user", "content": prompt},
+        ]
+        max_attempts = 3
+        last_error = None
+        for attempt in range(max_attempts):
+            try:
+                resp = await asyncio.wait_for(
+                    self.client.chat.completions.create(
+                        model=self._model,
+                        messages=messages,
+                        temperature=temperature,
+                    ),
+                    timeout=self.timeout,
+                )
+                return resp.choices[0].message.content or ""
+            except asyncio.TimeoutError as exc:
+                raise LLMTimeoutError(f"{self._provider_name.capitalize()} API timed out after {self.timeout}s.") from exc
+            except openai.AuthenticationError as exc:
+                raise LLMAuthError(f"{self._provider_name.capitalize()} authentication failed: {str(exc)}") from exc
+            except openai.RateLimitError as exc:
+                if attempt < max_attempts - 1:
+                    await asyncio.sleep(0.5 * (2 ** attempt))
+                    last_error = exc
+                    continue
+                raise LLMRateLimitError(f"{self._provider_name.capitalize()} rate limit exceeded: {str(exc)}") from exc
+            except openai.APITimeoutError as exc:
+                raise LLMTimeoutError(f"{self._provider_name.capitalize()} request timed out: {str(exc)}") from exc
+            except openai.APIError as exc:
+                raise LLMError(f"{self._provider_name.capitalize()} API error: {str(exc)}") from exc
+            except Exception as exc:
+                raise LLMError(f"Unexpected error calling {self._provider_name.capitalize()} API: {str(exc)}") from exc
+        if last_error:
+            raise LLMRateLimitError(f"{self._provider_name.capitalize()} rate limit exceeded after retries: {str(last_error)}") from last_error
+        raise LLMError(f"{self._provider_name.capitalize()} call failed after retries.")

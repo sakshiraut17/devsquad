@@ -75,6 +75,7 @@ class CreatePullRequestRequest(BaseModel):
     code_patch: str = Field(..., description="Unified diff patch to commit and publish as PR")
     verification_steps: list[str] = Field(default_factory=list, description="Verification test instructions")
     draft: bool = Field(default=False, description="Whether to open PR in draft state")
+    commit_direct: bool = Field(default=False, description="If True, commits directly to the default branch (e.g. main) without opening a PR branch")
     token: Optional[str] = Field(None, description="GitHub PAT with 'repo' scope")
 
 
@@ -356,23 +357,27 @@ async def create_pull_request_on_github(payload: CreatePullRequestRequest) -> di
                 detail=f"Could not fetch base branch '{default_branch}' commit SHA: {exc}",
             ) from exc
 
-        # Step 3: Create unique branch name
+        # Step 3: Create branch name or use default branch for direct commits
         import time
         safe_suffix = str(int(time.time()))[-4:]
-        if payload.branch_name:
+        if payload.commit_direct:
+            target_branch = default_branch
+        elif payload.branch_name:
             target_branch = payload.branch_name
         elif payload.issue_number:
             target_branch = f"devsquad/fix-issue-{payload.issue_number}-{safe_suffix}"
         else:
             target_branch = f"devsquad/patch-{patch_hash[:8]}-{safe_suffix}"
 
-        try:
-            await gh.create_branch(owner, repo, target_branch, base_sha)
-        except GitHubAPIError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to create branch '{target_branch}' on {owner}/{repo}: {exc}",
-            ) from exc
+        if not payload.commit_direct and target_branch != default_branch:
+            try:
+                await gh.create_branch(owner, repo, target_branch, base_sha)
+            except GitHubAPIError as exc:
+                if "already exists" not in str(exc).lower():
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Failed to create branch '{target_branch}' on {owner}/{repo}: {exc}",
+                    ) from exc
 
         # Step 4: Apply patches and commit modified files
         committed_files = []
@@ -388,13 +393,40 @@ async def create_pull_request_on_github(payload: CreatePullRequestRequest) -> di
             except Exception as exc:
                 logger.warning(f"Could not read existing file {file_path}: {exc}")
 
+            orig_normalized = orig_text.replace("\r\n", "\n")
+            diff_normalized = diff_content.replace("\r\n", "\n")
             try:
-                updated_text = apply_unified_diff(orig_text, diff_content)
+                updated_text = apply_unified_diff(orig_normalized, diff_normalized)
             except Exception as exc:
-                # If pure-python patch application failed, fallback to raw diff inclusion or original text
-                logger.warning(f"Patch hunk application warning for {file_path}: {exc}")
-                # If new file or unable to merge context, still attempt clean write
-                updated_text = orig_text if orig_text else diff_content
+                logger.warning(f"Standard patch hunk application failed for {file_path}: {exc}. Using Groq AI patch resolver...")
+                try:
+                    from app.services.llm.factory import get_llm_provider
+                    llm = get_llm_provider()
+                    patch_prompt = (
+                        f"Apply this code patch cleanly and faithfully to the source file below.\n\n"
+                        f"FILE: {file_path}\n\n"
+                        f"ORIGINAL CONTENT:\n```\n{orig_normalized}\n```\n\n"
+                        f"PATCH TO APPLY:\n```diff\n{diff_normalized}\n```\n\n"
+                        f"Return ONLY the complete, updated file content with the patch applied. Do not add markdown fences, conversational text, or unrelated changes."
+                    )
+                    ai_file = await llm.generate_text(
+                        prompt=patch_prompt,
+                        system_instruction="You are an automated git merge and patch engine. Output only the exact updated file content."
+                    )
+                    clean_file = ai_file.strip()
+                    if clean_file.startswith("```"):
+                        clean_file = re.sub(r"^```[a-zA-Z]*\n", "", clean_file)
+                        clean_file = re.sub(r"\n```$", "", clean_file)
+                    if clean_file and len(clean_file) >= (len(orig_normalized) * 0.4):
+                        updated_text = clean_file
+                    else:
+                        raise exc
+                except Exception as ai_exc:
+                    logger.error(f"AI patch resolution failed for {file_path}: {ai_exc}")
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Could not apply patch cleanly to '{file_path}': {exc}",
+                    ) from exc
 
             commit_msg = (
                 f"fix({file_path}): DevSquad automated resolution for issue #{payload.issue_number}"
@@ -418,6 +450,18 @@ async def create_pull_request_on_github(payload: CreatePullRequestRequest) -> di
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail=f"Failed to commit changes for '{file_path}' to branch '{target_branch}': {exc}",
                 ) from exc
+
+        if payload.commit_direct:
+            file_target = committed_files[0] if committed_files else ""
+            return {
+                "success": True,
+                "committed_to_main": True,
+                "branch": default_branch,
+                "committed_files": committed_files,
+                "commit_message": commit_msg,
+                "target": f"{owner}/{repo}",
+                "html_url": f"https://github.com/{owner}/{repo}/blob/{default_branch}/{file_target}",
+            }
 
         # Step 5: Format comprehensive PR description
         pr_title = (

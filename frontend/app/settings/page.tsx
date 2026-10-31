@@ -13,17 +13,22 @@ export default function SettingsPage() {
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [healthLoading, setHealthLoading] = useState(true);
 
+  const fetchHealth = () => {
+    setHealthLoading(true);
+    api
+      .getHealth()
+      .then((data) => setHealth(data))
+      .catch(() => setHealth(null))
+      .finally(() => setHealthLoading(false));
+  };
+
   useEffect(() => {
     const u = getSessionUser();
     if (u) setUser(u);
     if (process.env.NEXT_PUBLIC_API_URL) {
       setApiBaseUrl(process.env.NEXT_PUBLIC_API_URL);
     }
-    api
-      .getHealth()
-      .then((data) => setHealth(data))
-      .catch(() => setHealth(null))
-      .finally(() => setHealthLoading(false));
+    fetchHealth();
   }, []);
 
   const dbComponent = health?.components?.database;
@@ -34,33 +39,53 @@ export default function SettingsPage() {
     <div className="flex-1 flex flex-col min-w-0 bg-background">
       <Navbar title="Settings" subtitle="Environment Parameters & Security Configuration" />
 
-      <main className="p-6 max-w-5xl w-full mx-auto space-y-6">
+      <main className="p-6 max-w-5xl w-full mx-auto space-y-6 font-sans">
         <div>
-          <h2 className="text-sm font-semibold text-text-primary font-mono flex items-center gap-2 uppercase tracking-wider">
-            <Settings className="w-4 h-4 text-forge-lime" />
+          <h2 className="text-base sm:text-lg font-bold text-text-primary flex items-center gap-2 tracking-tight">
+            <Settings className="w-5 h-5 text-cyan-400" />
             Platform &amp; Integration Parameters
           </h2>
-          <p className="text-xs text-text-muted font-mono mt-0.5">
+          <p className="text-xs sm:text-sm text-text-secondary mt-0.5">
             Live subsystem diagnostics, maintainer identity, API connection, and security policy limits.
           </p>
         </div>
 
         {/* Live Subsystems & Diagnostics */}
-        <div className="p-5 rounded-lg bg-surface border border-border-subtle space-y-4">
-          <div className="flex items-center justify-between border-b border-border-subtle pb-3">
-            <div className="flex items-center gap-2 text-text-primary font-mono text-xs font-bold uppercase tracking-wider">
-              <Cpu className="w-4 h-4 text-cyan-ice" />
+        <div className="p-6 rounded-2xl bg-surface/90 border border-border-subtle space-y-4 shadow-sm">
+          <div className="flex items-center justify-between border-b border-border-subtle pb-3.5">
+            <div className="flex items-center gap-2 text-text-primary text-sm font-bold">
+              <Cpu className="w-4 h-4 text-cyan-400" />
               Live Subsystems &amp; Operational Health
             </div>
-            <span
-              className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold uppercase border ${
-                health?.status === "healthy" || health?.status === "operational"
-                  ? "bg-semantic-success/10 text-semantic-success border-semantic-success/30"
-                  : "bg-amber-attention/10 text-amber-attention border-amber-attention/30"
-              }`}
-            >
-              {healthLoading ? "PROBING..." : `SYSTEM ${health?.status?.toUpperCase() || "OFFLINE"}`}
-            </span>
+            <div className="flex items-center gap-2">
+              <span
+                className={`text-[10px] font-mono px-2.5 py-1 rounded font-bold uppercase border ${
+                  healthLoading
+                    ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/30 animate-pulse"
+                    : health?.status === "healthy" || health?.status === "operational"
+                    ? "bg-semantic-success/10 text-semantic-success border-semantic-success/30"
+                    : health?.status === "degraded"
+                    ? "bg-amber-attention/10 text-amber-attention border-amber-attention/30"
+                    : "bg-rose-500/10 text-rose-400 border-rose-500/30"
+                }`}
+              >
+                {healthLoading
+                  ? "PROBING SUBSYSTEMS..."
+                  : health?.status === "operational" || health?.status === "healthy"
+                  ? "SYSTEM OPERATIONAL"
+                  : health?.status === "degraded"
+                  ? "SYSTEM DEGRADED (AST FALLBACK)"
+                  : "SYSTEM DISCONNECTED"}
+              </span>
+              <button
+                onClick={fetchHealth}
+                disabled={healthLoading}
+                className="text-[10px] font-mono px-2 py-0.5 rounded border border-border-subtle hover:border-cyan-400/40 text-text-muted hover:text-text-primary transition-colors disabled:opacity-50"
+                title="Re-probe Subsystems"
+              >
+                Refresh
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-mono">
@@ -71,13 +96,26 @@ export default function SettingsPage() {
                 LLM Inference Provider
               </div>
               <div className="text-text-primary font-bold">
-                {llmComponent?.details?.provider?.toUpperCase() || "GROQ"}
+                {healthLoading
+                  ? "PROBING..."
+                  : llmComponent?.details?.provider
+                  ? String(llmComponent.details.provider).toUpperCase()
+                  : "NOT CONFIGURED"}
               </div>
-              <div className="text-text-muted text-[10px] truncate" title={llmComponent?.details?.model || "openai/gpt-oss-120b"}>
-                Model: <span className="text-cyan-ice">{llmComponent?.details?.model || "openai/gpt-oss-120b"}</span>
+              <div className="text-text-muted text-[10px] truncate" title={String(llmComponent?.details?.model || "")}>
+                Model:{" "}
+                <span className="text-cyan-ice">
+                  {healthLoading ? "..." : String(llmComponent?.details?.model || "none")}
+                </span>
               </div>
-              <div className="text-[10px] text-semantic-success">
-                {llmComponent?.status === "operational" ? "● Ready & Responsive" : "Status: Probing"}
+              <div className="text-[10px]">
+                {healthLoading ? (
+                  <span className="text-text-muted animate-pulse">Probing status...</span>
+                ) : llmComponent?.status === "operational" ? (
+                  <span className="text-semantic-success">● Ready &amp; Responsive</span>
+                ) : (
+                  <span className="text-amber-attention">● {llmComponent?.message || "Not configured"}</span>
+                )}
               </div>
             </div>
 
@@ -88,13 +126,26 @@ export default function SettingsPage() {
                 Persistent Datastore
               </div>
               <div className="text-text-primary font-bold">
-                {dbComponent?.details?.engine?.toUpperCase() || "SQLITE (AIOSQLITE)"}
+                {healthLoading
+                  ? "PROBING..."
+                  : dbComponent?.details?.engine
+                  ? String(dbComponent.details.engine).toUpperCase()
+                  : "SQLITE (AIOSQLITE)"}
               </div>
               <div className="text-text-muted text-[10px]">
-                Migration: <span className="text-forge-lime">{dbComponent?.details?.migration_version || "1a0c41410573"}</span>
+                Migration:{" "}
+                <span className="text-forge-lime">
+                  {healthLoading ? "..." : String(dbComponent?.details?.migration_version || "Head")}
+                </span>
               </div>
-              <div className="text-[10px] text-semantic-success">
-                {dbComponent?.status === "operational" ? "● WAL Journal Active" : "Status: Probing"}
+              <div className="text-[10px]">
+                {healthLoading ? (
+                  <span className="text-text-muted animate-pulse">Probing datastore...</span>
+                ) : dbComponent?.status === "operational" ? (
+                  <span className="text-semantic-success">● Connected &amp; Verified</span>
+                ) : (
+                  <span className="text-rose-400">● Connection Error</span>
+                )}
               </div>
             </div>
 
@@ -105,13 +156,31 @@ export default function SettingsPage() {
                 Test Sandbox Isolation
               </div>
               <div className="text-text-primary font-bold">
-                {dockerComponent?.status === "operational" ? "DOCKER CONTAINER" : "AST STATIC VALIDATION"}
+                {healthLoading
+                  ? "PROBING..."
+                  : dockerComponent?.status === "operational"
+                  ? "DOCKER CONTAINER"
+                  : "AST STATIC VALIDATION"}
               </div>
               <div className="text-text-muted text-[10px]">
-                Mode: {dockerComponent?.status === "operational" ? "Containerized Sandbox" : "Deterministic Fallback"}
+                Mode:{" "}
+                {healthLoading
+                  ? "..."
+                  : dockerComponent?.status === "operational"
+                  ? "Containerized Sandbox"
+                  : "Deterministic Fallback"}
               </div>
-              <div className={`text-[10px] ${dockerComponent?.status === "operational" ? "text-semantic-success" : "text-amber-attention"}`}>
-                ● {dockerComponent?.status === "operational" ? "Daemon Connected" : "AST Sandbox Active"}
+              <div
+                className={`text-[10px] ${
+                  dockerComponent?.status === "operational" ? "text-semantic-success" : "text-amber-attention"
+                }`}
+              >
+                ●{" "}
+                {healthLoading
+                  ? "Probing sandbox..."
+                  : dockerComponent?.status === "operational"
+                  ? "Daemon Connected"
+                  : "AST Sandbox Active"}
               </div>
             </div>
           </div>

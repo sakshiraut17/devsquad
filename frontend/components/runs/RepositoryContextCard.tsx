@@ -69,14 +69,14 @@ export function RepositoryContextCard({ context }: RepositoryContextCardProps) {
         <div className="p-2.5 rounded bg-surface-elevated border border-border-subtle">
           <span className="text-[10px] text-text-muted uppercase block">Omitted / Unranked</span>
           <span className="text-text-muted font-bold mt-0.5 block">
-            {context.unranked_files_count} files
+            {(context.unranked_files_count ?? 0).toLocaleString()} files
           </span>
         </div>
 
         <div className="p-2.5 rounded bg-surface-elevated border border-border-subtle">
           <span className="text-[10px] text-text-muted uppercase block">Token Footprint</span>
           <span className="text-cyan-ice font-bold mt-0.5 block">
-            {context.total_token_count.toLocaleString()} tokens
+            {(context.total_token_count ?? 0).toLocaleString()} tokens
           </span>
         </div>
 

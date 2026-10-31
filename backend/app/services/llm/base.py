@@ -73,3 +73,12 @@ class LLMProvider(ABC):
         Generate structured output conforming to the given Pydantic schema.
         Accepts system instructions and untrusted user context separately.
         """
+
+    @abstractmethod
+    async def generate_text(
+        self,
+        prompt: str,
+        system_instruction: str = "",
+        temperature: float = 0.2,
+    ) -> str:
+        """Generate free-form text from prompt and system instruction."""

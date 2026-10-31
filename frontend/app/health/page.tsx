@@ -36,14 +36,14 @@ export default function DiagnosticsPage() {
     <div className="flex-1 flex flex-col min-w-0 bg-background">
       <Navbar onRefresh={loadHealth} title="System Diagnostics" subtitle="Subsystem Operational Readiness &amp; Honest Fallbacks" />
 
-      <main className="p-6 max-w-7xl w-full mx-auto space-y-6">
+      <main className="p-6 max-w-7xl w-full mx-auto space-y-6 font-sans">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border-subtle pb-4">
           <div>
-            <h2 className="text-sm font-mono font-bold text-text-primary uppercase tracking-wider flex items-center gap-2">
-              <Gauge className="w-4 h-4 text-forge-lime" />
+            <h2 className="text-base sm:text-lg font-bold text-text-primary tracking-tight flex items-center gap-2">
+              <Gauge className="w-5 h-5 text-cyan-400" />
               Runtime Subsystem Verification Matrix
             </h2>
-            <p className="text-xs text-text-muted font-mono mt-0.5">
+            <p className="text-xs sm:text-sm text-text-secondary mt-0.5">
               Honest operational boundaries: differentiates configured, reachable, verified, fallback, and unavailable.
             </p>
           </div>

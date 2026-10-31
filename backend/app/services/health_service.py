@@ -12,6 +12,10 @@ from app.schemas.health import ComponentHealth, HealthResponse
 class HealthService:
     """Provides genuine health and connectivity checks without simulated or fake results."""
 
+    _cached_docker_health: ComponentHealth | None = None
+    _cached_docker_time: float = 0.0
+    _docker_cache_ttl: float = 30.0
+
     @staticmethod
     async def check_database(db: AsyncSession) -> ComponentHealth:
         """Check database reachability via explicit SELECT 1 ping."""
@@ -113,28 +117,37 @@ class HealthService:
             checked_at=checked_at,
         )
 
-    @staticmethod
-    def check_docker() -> ComponentHealth:
+    @classmethod
+    def check_docker(cls, force: bool = False) -> ComponentHealth:
         """
         Check Docker daemon availability.
         Distinguishes operational daemon from an unavailable environment.
+        Caches result for 30 seconds to prevent blocking event loop on Windows named pipes.
         """
+        now_ts = time.time()
+        if not force and cls._cached_docker_health is not None:
+            if (now_ts - cls._cached_docker_time) < cls._docker_cache_ttl:
+                return cls._cached_docker_health
+
         checked_at = datetime.now(timezone.utc)
         if not settings.docker_sandbox_enabled:
-            return ComponentHealth(
+            result = ComponentHealth(
                 component="docker",
                 status="unavailable",
                 message="Docker sandbox is disabled in configuration. DevSquad will use AST static validation fallback.",
                 details={"enabled": False},
                 checked_at=checked_at,
             )
+            cls._cached_docker_health = result
+            cls._cached_docker_time = now_ts
+            return result
 
         try:
-            client = docker.from_env(timeout=3)
+            client = docker.from_env(timeout=1)
             is_alive = client.ping()
             if is_alive:
                 version_info = client.version()
-                return ComponentHealth(
+                result = ComponentHealth(
                     component="docker",
                     status="operational",
                     message="Docker daemon is active and responsive.",
@@ -145,21 +158,26 @@ class HealthService:
                     },
                     checked_at=checked_at,
                 )
-            return ComponentHealth(
-                component="docker",
-                status="unavailable",
-                message="Docker ping returned False.",
-                details={},
-                checked_at=checked_at,
-            )
+            else:
+                result = ComponentHealth(
+                    component="docker",
+                    status="unavailable",
+                    message="Docker ping returned False.",
+                    details={},
+                    checked_at=checked_at,
+                )
         except (docker.errors.DockerException, Exception) as exc:
-            return ComponentHealth(
+            result = ComponentHealth(
                 component="docker",
                 status="unavailable",
                 message="Docker daemon is not running or unavailable. DevSquad will use AST static validation fallback.",
                 details={"error": str(exc)},
                 checked_at=checked_at,
             )
+
+        cls._cached_docker_health = result
+        cls._cached_docker_time = now_ts
+        return result
 
     @staticmethod
     def check_security_guardian() -> ComponentHealth:
@@ -185,10 +203,11 @@ class HealthService:
     @classmethod
     async def get_composite_health(cls, db: AsyncSession) -> HealthResponse:
         """Aggregate health check for all platform subsystems."""
+        import asyncio
         now = datetime.now(timezone.utc)
         db_health = await cls.check_database(db)
         llm_health = cls.check_llm()
-        docker_health = cls.check_docker()
+        docker_health = await asyncio.to_thread(cls.check_docker)
         security_health = cls.check_security_guardian()
 
         components = {

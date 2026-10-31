@@ -132,25 +132,39 @@ class CoderAgent:
         per_file_diffs = split_multi_file_unified_diff(unified_diff)
         file_hashes: Dict[str, str] = {}
         for tf, fdiff in per_file_diffs.items():
-            if tf not in source_files:
+            actual_tf = tf
+            if actual_tf not in source_files:
+                for prefix in ("a/", "b/", "/"):
+                    if actual_tf.startswith(prefix) and actual_tf[len(prefix):] in source_files:
+                        actual_tf = actual_tf[len(prefix):]
+                        break
+
+            if actual_tf not in source_files:
                 # Allow only if explicitly creating a new file (e.g. --- /dev/null or base is empty)
                 is_new_file = "--- /dev/null" in fdiff or fdiff.startswith("--- a/dev/null") or "@@ -0,0 " in fdiff
                 if not is_new_file:
                     raise ValidationError(
                         f"Cannot patch file '{tf}': actual base content was not retrieved in repository context."
                     )
-                file_hashes[tf] = compute_sha256("")
+                file_hashes[actual_tf] = compute_sha256("")
             else:
-                file_hashes[tf] = compute_sha256(source_files[tf])
+                file_hashes[actual_tf] = compute_sha256(source_files[actual_tf])
 
         # 4. Safe Disposable Patch Application Verification
         for tf, fdiff in per_file_diffs.items():
-            orig_content = source_files.get(tf, "")
+            actual_tf = tf
+            if actual_tf not in source_files:
+                for prefix in ("a/", "b/", "/"):
+                    if actual_tf.startswith(prefix) and actual_tf[len(prefix):] in source_files:
+                        actual_tf = actual_tf[len(prefix):]
+                        break
+
+            orig_content = source_files.get(actual_tf, "")
             try:
                 # Verify diff applies cleanly to exact base source without mismatch
                 _ = apply_unified_diff(orig_content, fdiff)
             except PatchError as exc:
-                raise PatchError(f"Failed to apply patch to '{tf}': {str(exc)}") from exc
+                raise PatchError(f"Failed to apply patch to '{actual_tf}': {str(exc)}") from exc
 
 
         # 5. Application-side Content SHA-256 Calculation (Never trust model hash!)

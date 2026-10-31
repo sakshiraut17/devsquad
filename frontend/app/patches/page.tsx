@@ -114,49 +114,49 @@ export default function PatchLaboratoryPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 font-sans">
           {/* Patch Revisions Rail */}
-          <div className="lg:col-span-1 space-y-3">
-            <h2 className="text-xs font-mono font-bold text-text-primary uppercase tracking-wider">
+          <div className="lg:col-span-1 space-y-3.5">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
               Patch Revisions ({items.length})
             </h2>
 
             {loading ? (
-              <div className="space-y-2">
-                <div className="h-20 bg-surface animate-pulse rounded border border-border-subtle" />
-                <div className="h-20 bg-surface animate-pulse rounded border border-border-subtle" />
+              <div className="space-y-2.5">
+                <div className="h-24 bg-surface-elevated animate-pulse rounded-2xl border border-border-subtle" />
+                <div className="h-24 bg-surface-elevated animate-pulse rounded-2xl border border-border-subtle" />
               </div>
             ) : items.length === 0 ? (
-              <div className="p-6 text-center text-xs font-mono text-text-muted bg-surface border border-border-subtle rounded-lg">
+              <div className="p-8 text-center text-xs text-text-muted bg-surface/80 border border-border-subtle rounded-2xl">
                 No code patches recorded in database.
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 {items.map((item) => {
                   const isSelected = selectedItem?.patch.id === item.patch.id;
                   return (
                     <div
                       key={item.patch.id}
                       onClick={() => selectPatch(item)}
-                      className={`p-3.5 rounded-lg border cursor-pointer transition-all relative ${
+                      className={`p-4 rounded-2xl border cursor-pointer transition-all relative ${
                         isSelected
-                          ? "bg-surface-elevated border-forge-lime/50 shadow-md ring-1 ring-forge-lime/30"
-                          : "bg-surface border-border-subtle hover:border-border-strong hover:bg-surface-elevated/50"
+                          ? "bg-surface-elevated border-cyan-400/50 shadow-md ring-1 ring-cyan-400/30"
+                          : "bg-surface/90 border-border-subtle hover:border-border-strong hover:bg-surface-elevated/60"
                       }`}
                     >
                       {isSelected && (
-                        <span className="absolute left-0 top-2 bottom-2 w-1 rounded-r bg-forge-lime" />
+                        <span className="absolute left-0 top-3 bottom-3 w-1 rounded-r bg-cyan-400" />
                       )}
-                      <div className="flex items-center justify-between mb-1.5 pl-1">
-                        <span className="font-semibold text-xs text-text-primary font-mono truncate">
+                      <div className="flex items-center justify-between mb-2 pl-1">
+                        <span className="font-semibold text-sm text-text-primary truncate font-mono">
                           rev #{item.patch.revision} — {item.patch.target_files[0]}
                         </span>
                         <StatusBadge status={item.patch.validation_status} size="sm" />
                       </div>
-                      <p className="text-xs text-text-muted font-mono truncate pl-1">
+                      <p className="text-xs text-text-secondary truncate pl-1">
                         {item.patch.summary}
                       </p>
-                      <div className="text-[11px] text-text-muted font-mono mt-1.5 flex justify-between pl-1">
+                      <div className="text-xs text-text-muted font-mono mt-2 flex justify-between pl-1">
                         <span>run: {item.run.id.slice(0, 8)}…</span>
                         <span>{formatDate(item.patch.created_at)}</span>
                       </div>
